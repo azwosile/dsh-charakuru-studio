@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import path from 'node:path';
+import { tempProject } from './fixtures.mjs';
+import { startStudioHttpServer } from '../lib/host/server.js';
+import { loadProjectState } from '../lib/project/state.js';
+
+test('actual loopback HTTP: isolated projects, user review and request boundaries', async t => {
+  const dir = await tempProject(t), a = path.join(dir, 'a'), b = path.join(dir, 'b');
+  const srv = await startStudioHttpServer({ port: 0 });
+  t.after(() => srv.close());
+  const post = (route, body, headers = {}) => fetch(srv.baseUrl + route, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  const health = await (await fetch(srv.baseUrl + '/health')).json();
+  assert.equal(health.plugin, 'dsh-charakuru-studio');
+  assert.equal((await post('/studio/project/init', { projectDir: a, projectName: 'Alpha', monthlyCreditAllowance: 0 })).status, 200);
+  await post('/studio/project/init', { projectDir: b, projectName: 'Beta' });
+  const loaded = await (await fetch(srv.baseUrl + '/studio/bootstrap?projectDir=' + encodeURIComponent(a))).json();
+  assert.equal(loaded.projectState.projectName, 'Alpha'); assert.equal(loaded.projectSummary.remainingFreeCredits, 0);
+  assert.notEqual(srv.getActiveProjectDir(), a); assert.notEqual(srv.getActiveProjectDir(), b);
+  assert.equal((await post('/studio/project/checkpoint', { projectDir: a, action: 'approve' })).status, 400);
+  await post('/studio/project/checkpoint', { projectDir: a });
+  assert.equal((await loadProjectState(a)).state.stages['1_concept'].status, 'awaiting_review');
+  await post('/studio/project/checkpoint', { projectDir: a, action: 'approve' });
+  assert.equal((await loadProjectState(a)).state.activeStageId, '2_views');
+  assert.equal((await loadProjectState(b)).state.activeStageId, '1_concept');
+  const foreign = await post('/studio/project/init', { projectDir: a }, { Origin: 'https://example.com' });
+  assert.equal(foreign.status, 403); assert.equal(foreign.headers.get('Access-Control-Allow-Origin'), null);
+  assert.equal((await post('/studio/project/init', {}, { 'Content-Type': 'text/plain' })).status, 415);
+  const local = await post('/studio/prompts/compile', { slots: ['head_front'] }, { Origin: 'http://127.0.0.1:55642' });
+  assert.equal(local.headers.get('Access-Control-Allow-Origin'), 'http://127.0.0.1:55642'); assert.equal((await local.json()).pack.views.length, 1);
+  const hostileHost = await new Promise((resolve, reject) => {
+    const req = http.get(srv.baseUrl + '/health', { headers: { Host: 'example.com:' + srv.port } }, res => { res.resume(); resolve(res.statusCode); });
+    req.on('error', reject);
+  });
+  assert.equal(hostileHost, 403);
+  await fs.writeFile(path.join(a, 'project.charastudio.json'), 'broken');
+  assert.equal((await fetch(srv.baseUrl + '/studio/bootstrap?projectDir=' + encodeURIComponent(a))).status, 400);
+});

@@ -1,0 +1,16 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const release=path.join(root,'.charastudio-tmp','release');
+const bytes=await fs.readFile(path.join(release,'dsh-charakuru-studio-0.1.0.tgz'));
+const hash=crypto.createHash('sha256').update(bytes).digest('hex');
+const template=(await fs.readFile(path.join(root,'scripts','installer-template.ps1'),'utf8')).replace('__PACKAGE_SHA256__',hash);
+const bootstrap="$s=[IO.File]::ReadAllText($env:CHARAKURU_INSTALLER_SELF);$a=$s.Split(@('::CHARAKURU_SCRIPT_BASE64::'),[StringSplitOptions]::None)[1].Split(@('::CHARAKURU_PACKAGE_BASE64::'),[StringSplitOptions]::None)[0].Trim();& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($a))))";
+const encoded=Buffer.from(bootstrap,'utf16le').toString('base64');
+const wrap=value=>value.match(/.{1,76}/g).join('\r\n');
+const text=['@echo off','setlocal DisableDelayedExpansion','set "CHARAKURU_INSTALLER_SELF=%~f0"','set "CHARAKURU_INSTALLER_MODE=%~1"',`powershell.exe -NoLogo -NoProfile -InputFormat Text -OutputFormat Text -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,'set "CHARAKURU_EXIT=%errorlevel%"','if /i "%~1"=="/check" exit /b %CHARAKURU_EXIT%','echo.','pause','exit /b %CHARAKURU_EXIT%','::CHARAKURU_SCRIPT_BASE64::',wrap(Buffer.from(template,'utf8').toString('base64')),'::CHARAKURU_PACKAGE_BASE64::',wrap(bytes.toString('base64')),''].join('\r\n');
+const target=path.join(release,'Install-Charakuru-Studio.cmd');
+await fs.writeFile(target,text,'ascii');
+console.log(JSON.stringify({installer:target,bytes:Buffer.byteLength(text),packageSha256:hash}));

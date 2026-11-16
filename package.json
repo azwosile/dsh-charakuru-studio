@@ -1,0 +1,99 @@
+{
+  "name": "dsh-charakuru-studio",
+  "version": "0.1.0",
+  "description": "Standalone 2D-to-VRM 3D avatar studio plugin for DeepSeek Harness with AA image model hub (Qwen-Image-2.1, ComfyUI Anima, NovelAI V5), Tripo Studio free-quota scheduler, and dsh-blender-plugin linkage.",
+  "license": "MIT",
+  "author": {
+    "name": "azwosile",
+    "email": "azwosile@163.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/azwosile/dsh-charakuru-studio.git"
+  },
+  "homepage": "https://github.com/azwosile/dsh-charakuru-studio",
+  "bugs": {
+    "url": "https://github.com/azwosile/dsh-charakuru-studio/issues"
+  },
+  "type": "module",
+  "icon": "icon.svg",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "engines": {
+    "node": ">=22.0.0",
+    "dsh": "0.2.2-rc.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "locale/*.json",
+    "docs",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "scripts/check.mjs",
+    "tests/*.test.mjs",
+    "tests/fixtures.mjs"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "selftest": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0 <5.0.0",
+    "@deepseek-ai/schemastery": ">=3.18.0 <4.0.0",
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "vrm",
+    "3d-avatar",
+    "blender",
+    "tripo",
+    "comfyui",
+    "anima",
+    "qwen-image",
+    "novelai"
+  ]
+}

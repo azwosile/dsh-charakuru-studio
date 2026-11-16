@@ -1,0 +1,18 @@
+# Node & package managers
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+*.tgz
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local test & runtime artifacts
+.charastudio-tmp/
+coverage/
+*.env
+.env.*
+dsh-charakuru.local.json

@@ -1,0 +1,5 @@
+# dsh-charakuru-studio — DeepSeek Harness standalone 2D-to-VRM 3D Avatar Studio bundle
+- insert:
+    - id: dsh-charakuru-studio
+      name: 'dsh-charakuru-studio'
+      config: {}
