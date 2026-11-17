@@ -56,4 +56,6 @@
 - 回归护栏：`tests/client-panel.test.mjs` 断言 `inject` 必须是数组且源码不得出现 `inject: { required`。beacon 与收集器为临时诊断物，未留在仓库代码中。
 - 排查备忘：再遇到「条目在 boot graph 里但 UI 没反应」，先确认 `apply` 是否真的执行（注入 beacon 或对比 `inject` 形状），不要从 `sidebar.panellist` 的过滤/pin 逻辑入手——那一段对未 pin 的面板一律放行。
 
-Git 作者：azwosile <azwosile@163.com>。远端：https://github.com/azwosile/dsh-charakuru-studio.git 。本轮未执行 commit 或 push。
+Git 作者：azwosile <azwosile@163.com>。远端：https://github.com/azwosile/dsh-charakuru-studio.git 。
+- `c25415e` 入口改造（顶栏模态 → 侧栏行 + 主面板整页），已推送。
+- `924bbf9` `inject` 改回数组形式修掉「条目在 boot graph 里但侧栏不显示」，已推送；推送后重启的实例（GUI 端口 55000）实测 boot graph 条目 rev `77bfb7c877e4`、`GET /plugins/??dsh-charakuru-studio/client.js&rev=77bfb7c877e4` 返回 200 / 45432 字节，正文含 `inject: ['slots', 'locale']` 与 `sidebar.panellist`，不含 beacon 与 `showModal`。
