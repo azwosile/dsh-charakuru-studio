@@ -234,8 +234,11 @@ test('the entry point is a sidebar row plus a main page, not a header modal', as
   assert.equal(mounted.spec.id, 'dsh-charakuru-studio');
   assert.deepEqual(mounted.requires, ['react'], 'the bundle may only require host-provided react');
   // Cross-realm values: spread the arrays before comparing.
-  assert.deepEqual([...mounted.moduleExports.inject.required], ['slots', 'locale']);
-  assert.deepEqual([...mounted.moduleExports.inject.optional], ['layout', 'sessions', 'conversation']);
+  assert.deepEqual([...mounted.moduleExports.inject], ['slots', 'locale']);
+  // Regression guard: the web client realm silently rejects the object form of `inject`
+  // ({required, optional}) — the entry then never activates and no sidebar row appears.
+  assert.equal(Array.isArray(mounted.moduleExports.inject), true, 'inject must stay the array form');
+  assert.doesNotMatch(source, /inject:\s*\{\s*required/, 'the object form of inject never activates in the client realm');
 
   // It waits for the shell to declare seats instead of touching the tree directly.
   assert.deepEqual(mounted.harness.injections.map((item) => item.key), ['sidebar.panellist', 'main']);

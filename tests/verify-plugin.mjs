@@ -144,8 +144,10 @@ async function main() {
       throw new Error(`Unexpected require: ${id}`);
     });
     assert.equal(typeof modExports.apply, 'function');
-    assert.deepEqual([...modExports.inject.required], ['slots', 'locale']);
-    assert.deepEqual([...modExports.inject.optional], ['layout', 'sessions', 'conversation']);
+    // The web client realm only accepts the array form of `inject`; the object form
+    // ({required, optional}) leaves the entry inactive and `apply` never runs.
+    assert.equal(Array.isArray(modExports.inject), true, 'inject must stay the array form');
+    assert.deepEqual([...modExports.inject], ['slots', 'locale']);
   });
 
   await step('3. AA Image Leaderboard & Turnaround Prompt Compiler', async () => {
