@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio",
-    "description": "0.4.0 experimental: a native DSH character workbench with six stages, paired part views, local and optional cloud image adapters, DSH drafts and immutable Blender revisions. Cloud is off by default; structural success is not visual approval.",
+    "description": "0.6.0 experimental: illustration rebuild and base-mesh tailoring, external inputs at all six stages, and an independent AI-assisted local still renderer bound to Blender revisions. Human review remains separate.",
     "detail": "docs/DETAIL.md"
   }
 }

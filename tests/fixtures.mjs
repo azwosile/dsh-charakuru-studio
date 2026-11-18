@@ -11,9 +11,11 @@ export function crc32(b) { let c = 0xffffffff; for (const x of b) { c ^= x; for 
 function chunk(type, data) {
   const b = Buffer.alloc(data.length + 12); b.writeUInt32BE(data.length); b.write(type, 4); data.copy(b, 8); b.writeUInt32BE(crc32(b.subarray(4, b.length - 4)), b.length - 4); return b;
 }
-export function png() {
-  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 6;
-  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(Buffer.from([0,250,50,100,255]))), chunk('IEND', Buffer.alloc(0))]);
+export function png(width=1,height=1) {
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 6;
+  const raw=Buffer.alloc((1+width*4)*height);
+  for(let y=0;y<height;y++) for(let x=0;x<width;x++) raw.set([250,50,100,255], y*(width*4+1)+1+x*4);
+  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 export function zip(data, method = 8, descriptor = false) {
   const name = Buffer.from('image_0.png'), packed = method === 8 ? zlib.deflateRawSync(data) : data;

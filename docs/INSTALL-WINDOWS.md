@@ -1,5 +1,8 @@
 # Windows / Electron：安装、升级、回退、卸载
 
+**0.6.0**：选择 `dsh-charakuru-studio-0.6.0.tgz`。如果旧版仍占 Studio 端口，先在目标 profile 停用旧组件或为新实例设独立端口，并在工作台「项目文件」同步回环地址。不要并开同端口。现有工程会默认为原画重建；切换模式不会删除旧修订。渲染需本机 Eevee 可用，第三方模型仍从本机私有工程登记。
+
+
 版本：Avatar Studio 0.5.0（实验）。包名保持 `dsh-charakuru-studio`。目标 DSH 0.2.2-rc.3 / Node 22+。
 
 ## 安装与升级

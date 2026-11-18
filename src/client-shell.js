@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     var NS = 'charakuru-studio-ui';
     var PANEL_ID = 'charakuru-studio';
     var SIDEBAR_ORDER = 20;
-    var TABS = ['pipeline', 'materials', 'assets', 'editor', 'models', 'tripo', 'blender', 'credentials'];
+    var TABS = ['pipeline', 'assets', 'editor', 'render', 'materials', 'models', 'tripo', 'blender', 'credentials'];
     var CLIENT_VERSION = '__STUDIO_PACKAGE_VERSION__';
     var TIMEOUT_FAST = 15000;
     var TIMEOUT_SLOW = 300000;
@@ -140,7 +140,7 @@ window.__ModuleLoader__.load({
         activeStage: 'Active stage', progress: 'Progress',
         hostVersionMismatch: 'Host version does not match this workbench. Check the local port, then load the project again.',
         settingsHint: 'The Studio API is the loopback host this plugin starts on the machine running DeepSeek Harness. Change the port only when you moved it.',
-        pipeline: 'Project & reviews', models: 'Models & views', tripo: 'Tripo budget', blender: 'Blender', credentials: 'Credentials',
+        pipeline: 'Workbench', render: 'Render studio', models: 'Models & views', tripo: 'Tripo budget', blender: 'Blender', credentials: 'Credentials',
         editor: '3D editor & production', sourceBlend: 'Source Blend path', editorOperation: 'Operation', editorParams: 'Structured operation parameters (JSON)', editorRun: 'Save as new revision', editorImport: 'Import existing Blend', editorUndo: 'Rollback to previous revision', vrmAddonPath: 'VRM add-on parent directory', aiPrompt: 'AI edit request', aiRequest: 'Record AI edit request', camera: 'Camera', overlay: 'Reference overlay', overlayOpacity: 'Overlay opacity', saveView: 'Save camera / overlay', collectEditor: 'Collect editor job',
         aiDraft: 'Prepare DSH chat draft', aiRecorded: 'Request saved. Open a DSH conversation and prepare the draft again; nothing was sent.',
         aiReviewHint: 'Review and send the draft in DSH. After the Agent completes a Blender operation, load the project and inspect the resulting revision before accepting it.',
@@ -285,7 +285,7 @@ window.__ModuleLoader__.load({
         activeStage: '当前阶段', progress: '进度',
         hostVersionMismatch: 'Host 版本与当前工作台不匹配。请核对本机端口，再载入工程。',
         settingsHint: 'Studio API 由本插件在运行 DeepSeek Harness 的本机回环启动；只有改过端口时才需要修改。',
-        pipeline: '工程与关卡', models: '模型与视图', tripo: 'Tripo 预算', blender: 'Blender', credentials: '密钥',
+        pipeline: '制作工作台', render: '独立渲染', models: '模型与视图', tripo: 'Tripo 预算', blender: 'Blender', credentials: '密钥',
         editor: '三维编辑与生产', sourceBlend: '源 Blend 文件路径', editorOperation: '工序', editorParams: '结构化工序参数（JSON）', editorRun: '执行并保存新版本', editorImport: '导入已有 Blend', editorUndo: '回滚上一版本', vrmAddonPath: 'VRM 插件所在父目录', aiPrompt: 'AI 修改要求', aiRequest: '登记 AI 修改请求', camera: '相机方向', overlay: '参考图叠加', overlayOpacity: '叠加透明度', saveView: '保存视角与叠图', collectEditor: '收集编辑作业',
         aiDraft: '准备 DSH 会话草稿', aiRecorded: '请求已保存，尚未发送。打开 DSH 会话后可重新准备草稿。',
         aiReviewHint: '在 DSH 会话检查并发送草稿。Agent 完成 Blender 工序后，点击载入工程，预览新版本并决定是否接受。',
@@ -316,7 +316,7 @@ window.__ModuleLoader__.load({
       }
     };
 
-    var css = [
+    var css = /* WORKBENCH_CSS */ [
       '.ck-page{container-type:inline-size;display:flex;flex-direction:column;height:100%;min-height:0;color:var(--dsw-alias-label-primary);font:13px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}',
       '.ck-head{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-start;justify-content:space-between;padding:calc(18px + var(--dsh-frame-top-clearance,0px)) clamp(18px,3vw,32px) 12px}',
       '.ck-heading{min-width:0}',
@@ -431,6 +431,10 @@ window.__ModuleLoader__.load({
       return {
         base: base,
         materialStage: '', materialRole: '', materialSlot: 'head_front', materialPart: 'head', materialPath: '', materialPreview: '', materialMotionId: '', editorMaterialId: '', materialTarget: '', materialTextureSlot: '0',
+        deskInitialMode:'illustration',deskStage:'',deskBaseStep:'base',deskAngle:'front',deskImageGuides:true,deskPart:'head',deskCandidate:'',
+        deskBody:'',deskRig:'',deskKeep:'',deskAssemblyScale:'1',deskAssemblyX:'0',deskAssemblyY:'0',deskAssemblyZ:'0',deskScaleX:'1',deskScaleY:'1',deskScaleZ:'1',deskShape:'',deskShapeValue:'0',deskDonor:'',deskReplace:'',deskBone:'',deskHeadScale:'1',deskHeadX:'0',deskHeadY:'0',deskHeadZ:'0',
+        deskKit:['clothing','hair','accessory'],deskBudget:'0',deskQuote:'',
+        deskRenderId:'',deskRenderCompare:'',deskRenderBrief:'',deskRenderNote:'',deskPreset:'wine_stage',deskRenderCamera:'three_quarter',deskFraming:'full',deskSize:'draft',deskToon:'preset',deskExposure:'0',deskKey:'1',deskFill:'0.8',deskRim:'1',
         imageRequestId: '', accountAlias: '', accountLimit: '0', accountChannel: 'tripo_studio', sourceBlend: '', editorOperation: 'audit', editorParams: '{}', vrmAddonPath: '', aiPrompt: '', editorCamera: 'front', overlayId: '', overlayOpacity: '0.35', selectedObject: '', playMotion: false, assetKind: 'image', slotId: 'source', sourcePath: '', previewId: '', projectDir: activeProject, prompt: '', source: '', allowance: '200',
         model: config.defaultImageModel || 'qwen-image-2.1-local',
         apiModel: '', variant: 'base', artist: '', unet: '', imageScope: 'head_front', referenceMode: 'project', compareAngle: 'front',
@@ -492,7 +496,7 @@ window.__ModuleLoader__.load({
         if (typeof fetch !== 'function') throw new Error('fetch is unavailable in this host');
         var controller = new AbortController();
         controllers.add(controller);
-        var slow = file || route.indexOf('/materials/') >= 0 || route.indexOf('/editor/run') >= 0 || route.indexOf('/editor/collect') >= 0 || route.indexOf('generate') >= 0 || route.indexOf('/blender/stage') >= 0;
+        var slow = file || route.indexOf('/materials/') >= 0 || route.indexOf('/render/run') >= 0 || route.indexOf('/render/collect') >= 0 || route.indexOf('/editor/run') >= 0 || route.indexOf('/editor/collect') >= 0 || route.indexOf('generate') >= 0 || route.indexOf('/blender/stage') >= 0;
         var timer = setTimeout(function () { controller.abort(); }, slow ? TIMEOUT_SLOW : TIMEOUT_FAST);
         try {
           var res = await fetch(loopback(state.form.base) + route, {
@@ -538,6 +542,7 @@ window.__ModuleLoader__.load({
         var dir = state.form.projectDir;
         var base = loopback(state.form.base);
         var data = await request('/studio/bootstrap' + (dir ? '?projectDir=' + encodeURIComponent(dir) : ''));
+        if (base!==loopback(state.form.base) || dir!==state.form.projectDir) return null;
         if (data.version && data.version!==CLIENT_VERSION) {
           set({boot:null,loaded:false,result:null});
           throw new Error(t('hostVersionMismatch')+' Host '+data.version+' / UI '+CLIENT_VERSION);
@@ -545,6 +550,7 @@ window.__ModuleLoader__.load({
         if (data.version===CLIENT_VERSION) try { localStorage.setItem('avatar-studio-loopback',base); } catch (_) {}
         set({ boot: data, loaded: true });
         if (hydrate) hydrateForm(data);
+        else if (data.activeProjectDir && data.activeProjectDir!==dir) put('projectDir',data.activeProjectDir);
         return data;
       }
 
@@ -768,6 +774,7 @@ function GeometryPreview(props) {
     /* PREVIEW_END */
     /* MATERIALS_START */
     /* MATERIALS_END */
+    /* WORKBENCH_START */
     function makePanel(ctx, registered) {
       return function StudioWorkbench(props) {
         var studio = (props && props.studio) || registered;
@@ -785,7 +792,6 @@ function GeometryPreview(props) {
         var stages = (boot && boot.stages) || [];
         var projectState = boot && boot.projectExists
           && (!form.projectDir || form.projectDir === boot.activeProjectDir) ? boot.projectState : null;
-        var summary = projectState && boot.projectSummary;
         var activeStage = projectState && projectState.stages && projectState.stages[projectState.activeStageId];
         var models = (boot && boot.aaCatalog && boot.aaCatalog.models) || [];
         var selectedModel;
@@ -885,66 +891,9 @@ function GeometryPreview(props) {
           });
         }
 
-        var step = stages.find(function(s){return projectState && s.id === projectState.activeStageId;});
-        var nextPage = step && step.nextTab;
-        var openStage = function(stage) {
-          if (stage.id === '1_concept') { studio.put('assetKind', 'image'); studio.put('slotId', 'source'); }
-          if (stage.id === '2_views') { studio.put('assetKind', 'image'); studio.put('slotId', 'head_front'); }
-          selectTab(stage.nextTab || 'assets');
-        };
         function openIntake(stageId) {
           studio.put('materialStage',stageId || '');studio.put('materialRole','');selectTab('materials');
         }
-        var pipeline = [
-          h('div', { className: 'ck-flow-heading', key: 'flow' },
-            h('div', null, h('div',{className:'ck-eyebrow'},t('nativeLabel')), h('h2', null, t('workflowTitle')), h('p', null, t('workflowIntro'))),
-            h('span', {className:'ck-chip','data-tone':'brand'}, projectState ? projectState.projectName || t('pipeline') : t('notInitialized'))),
-          !projectState || projectState.activeStageId === '1_concept' ? card('projectSetup', h(React.Fragment, null,
-            field('prompt', 'prompt', 'textarea'),
-            h('div', { className: 'ck-grid' }, field('source', 'source'), field('allowance', 'allowance', 'number')),
-            h('div', { className: 'ck-row' }, button('init', function () {
-              studio.action('/studio/project/init', { characterPrompt: form.prompt, sourceImage: form.source,
-                monthlyCreditAllowance: Number(form.allowance), preferredImageModel: form.model }, true);
-            }, !boot, 'primary'), projectState ? button('assets',function(){openStage({id:'1_concept',nextTab:'assets'});}) : null))) :
-            details('projectSetup', false, field('prompt','prompt','textarea'), h('div',{className:'ck-grid'},field('source','source'),field('allowance','allowance','number')),
-              button('init',function(){studio.action('/studio/project/init',{characterPrompt:form.prompt,sourceImage:form.source,monthlyCreditAllowance:Number(form.allowance),preferredImageModel:form.model},true); })),
-          projectState ? card(null, h(React.Fragment, null,
-            h('div', { className:'ck-row ck-flow-meta' }, h('strong',null, summary.completedStages + '/' + stages.length + ' · ' + t('progress')),
-              h('span', {className:'ck-muted'}, t('views') + ' ' + summary.readyViews + '/11 · ' + t('credits') + ' ' + summary.remainingFreeCredits)),
-            h('progress', { className: 'ck-progress', value: summary.percent, max: 100, 'aria-label': t('progress') }),
-            h('ol', { className:'ck-stage-list' }, stages.map(function (stage) {
-              var record = (projectState.stages && projectState.stages[stage.id]) || { status: 'pending' };
-              var current = stage.id === projectState.activeStageId;
-              return h('li', { className: 'ck-stage', key: stage.id, 'data-active': current, 'aria-current': current ? 'step' : undefined },
-                h('span',{className:'ck-step-no','aria-hidden':'true'},String(stage.index).padStart(2,'0')),
-                h('div', { className: 'ck-stage-body' },
-                  h('strong', null, stage['title' + lang] || stage.id),
-                  h('p', null, stage['summary' + lang] || ''),
-                  stage['artifact' + lang] ? h('p',{className:'ck-stage-artifact'},t('stageArtifact') + ' · ' + stage['artifact' + lang]) : null),
-                h('div',{className:'ck-stage-actions'},h('span', { className: 'ck-pill', 'data-status': record.status || 'pending' }, t(record.status || 'pending')),
-                  boot?.materialRoles ? button('materialInclude',function(){openIntake(stage.id);},false,current?'default':'ghost') : null,
-                  button(current?'openStep':'viewStep',function(){openStage(stage);},false,current?'primary':'ghost')));
-            })))) : null,
-          projectState ? card('checkpointTitle', h(React.Fragment, null,
-            step ? h('p',{className:'ck-muted'},t('activeStage') + ' · ' + stageName(step.id)) : null,
-            boot.reviewReadiness && !boot.reviewReadiness.ready ? h('div', { className: 'ck-callout', role:'status' }, boot.reviewReadiness.reason) :
-              h('p',{className:'ck-muted'},t('checkpointHelp')),
-            field('notes', 'notes', 'textarea'),
-            h('div', { className: 'ck-row' }, ['request_review', 'approve', 'reject'].map(function (name) {
-              var status = activeStage ? activeStage.status : '';
-              var disabled = !activeStage || (name === 'request_review'
-                ? status === 'completed' || boot.reviewReadiness && !boot.reviewReadiness.ready
-                : status !== 'awaiting_review' || name === 'approve' && boot.reviewReadiness && !boot.reviewReadiness.ready);
-              return button(name === 'request_review' ? 'review' : name, function () {
-                studio.action('/studio/project/checkpoint', { action: name, stageId: projectState.activeStageId, notes: form.notes,
-                  expectedRevision: projectState.stateRevision }, true);
-              }, disabled);
-            })),
-            h('div', { className: 'ck-row' }, button('insert', insert, !activeStage, 'primary'),
-              nextPage && nextPage !== 'assets' && (step.id === '2_views' || step.id === '3_tripo') ? button('assets',function(){selectTab('assets');}) : null),
-            h('p',{className:'ck-muted'},t('draftOnly')))) : null
-        ];
-
         var viewDefs = (boot && boot.requiredViewSlots) || [];
         var chosenSlots = form.imageScope === 'all' ? undefined : ['head', 'body', 'balance'].includes(form.imageScope)
           ? viewDefs.filter(function(v) { return v.group === form.imageScope; }).map(function(v) { return v.id; }) : [form.imageScope];
@@ -1194,7 +1143,7 @@ function GeometryPreview(props) {
             details('result',false,h('pre',{className:'ck-pre'},JSON.stringify({gates:editRevision.audit.gates,notes:editRevision.audit.notes,revisions:editorState.revisions.map(function(r){return {id:r.id,operation:r.operation,parentId:r.parentId};})},null,2)))
           ):null
         ];
-        var bodies = { materials: h(MaterialWorkspace,{studio:studio,state:state,projectState:projectState,stages:stages,lang:lang,selectTab:selectTab,card:card}), editor: editorTab, assets: assetTab, pipeline: pipeline, models: modelsTab, tripo: tripoTab, blender: blenderTab, credentials: credentialsTab };
+        var bodies = { render:h(RenderWorkspace,{studio:studio,state:state,projectState:projectState,lang:lang,selectTab:selectTab}), materials: h(MaterialWorkspace,{studio:studio,state:state,projectState:projectState,stages:stages,lang:lang,selectTab:selectTab,card:card}), editor: editorTab, assets: assetTab, pipeline:h(WorkbenchWorkspace,{studio:studio,state:state,projectState:projectState,stages:stages,lang:lang,selectTab:selectTab,handoff:insert,openSettings:function(){if(typeof document!=='undefined'){var x=document.querySelector('.ck-content > .ck-details');if(x){x.open=true;x.querySelector('input')?.focus();}}}}), models: modelsTab, tripo: tripoTab, blender: blenderTab, credentials: credentialsTab };
         var statusChip = busy ? h('span', { className: 'ck-chip', 'data-tone': 'brand' }, t('busy'))
           : state.error ? h('span', { className: 'ck-chip', 'data-tone': 'error', role: 'alert' }, state.error)
             : state.notice ? h('span', { className: 'ck-chip', 'data-tone': 'ok', role: 'status' }, state.notice)

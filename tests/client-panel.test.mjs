@@ -118,6 +118,8 @@ const hostNodes = (tree) => flatten(tree).filter((node) => node.type !== '#text'
 const textOf = (tree) => flatten(tree).filter((node) => node.type === '#text').map((node) => node.text).join(' ');
 const byClass = (tree, className) => hostNodes(tree).filter((node) => String(node.props.className || '').split(' ').includes(className));
 const byRole = (tree, role) => hostNodes(tree).filter((node) => node.props.role === role);
+const nested = (mounted, tree, name) => { const n=hostNodes(tree).find(n=>n.type?.name===name); assert.ok(n, name); return mounted.runtime.render(n.type,n.props); };
+const btn=(tree,label)=>hostNodes(tree).find(n=>n.type==='button'&&textOf(n)===label);
 
 function createHarness() {
   const registrations = [];
@@ -302,11 +304,11 @@ test('the page renders a workbench shell with a tab rail and no dialog chrome', 
   assert.equal(headings.length, 1);
   assert.equal(textOf(headings[0]).trim(), 'Character → VRM studio');
 
-  // 8 tabs, exactly one selected, all pointing at the same panel region.
+  // 9 tabs, exactly one selected, all pointing at the same panel region.
   const tabs = byRole(tree, 'tab');
-  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false, false]);
-  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1, -1]);
-  assert.equal(textOf(tabs[0]).includes('Project & reviews'), true);
+  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false, false, false]);
+  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1, -1, -1]);
+  assert.equal(textOf(tabs[0]).includes('Workbench'), true);
   const rail = byRole(tree, 'tablist')[0];
   assert.equal(rail.props['aria-orientation'], 'vertical');
   const panelRegion = byRole(tree, 'tabpanel')[0];
@@ -332,7 +334,7 @@ test('tabs switch, keep state across remounts and follow the active language', a
 
   // Before bootstrap lands only the pipeline tab has something to show: the
   // project form needs nothing but the API base.
-  assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-prompt')), true, 'project form is usable immediately');
+  assert.equal(hostNodes(nested(mounted,tree,'WorkbenchWorkspace')).some((node) => String(node.props.id || '').endsWith('-f-prompt')), true, 'project form is usable immediately');
 
   const modelsTab = byRole(tree, 'tab').find((tab) => textOf(tab).includes('Models & views'));
   assert.ok(modelsTab);
@@ -352,13 +354,13 @@ test('tabs switch, keep state across remounts and follow the active language', a
   });
 
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, false, true, false, false, false]);
   assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-model')), true, 'model picker is on screen');
   assert.equal(studio.getSnapshot().tab, 'models');
 
   // A fresh mount reuses the same store: the workbench does not reset on navigation.
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, false, true, false, false, false]);
 
   // Language switch: labels resolve through the locale service on both surfaces.
   mounted.harness.setLanguage('zh');
@@ -521,9 +523,9 @@ test('a project with unrecorded stages renders pending rows instead of crashing'
   });
 
   const tree = mounted.runtime.render(Panel, mounted.face);
-  const pills = hostNodes(tree).filter((node) => node.props && node.props['data-status']);
+  const pills = byClass(nested(mounted,tree,'WorkbenchWorkspace'),'ck-desk-phases')[0].children;
   assert.deepEqual(pills.map((pill) => pill.props['data-status']), ['in_progress', 'pending']);
-  assert.match(textOf(pills[1]), /Pending/);
+  assert.equal(pills[1].props['data-done'],false);
 });
 
 test('disposal stops in-flight requests and unregisters the seats', async () => {
@@ -571,12 +573,13 @@ test('native workbench has stage navigation on both DSH renderer contracts witho
     studio.set({loaded:true,boot:{stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,projectExists:true,activeProjectDir:'fixture',
       projectState:{activeStageId:'2_views',projectName:'Native',stages,views:{},assets:{items:[],selected:{}}},projectSummary:{completedStages:1,readyViews:0,remainingFreeCredits:0,percent:16}}});
     const tree = render();
-    assert.equal(byRole(tree,'tab').length,8);
+    assert.equal(byRole(tree,'tab').length,9);
     assert.equal(hostNodes(tree).some(node=>node.type==='iframe'),false);
-    assert.equal(hostNodes(tree).filter(node=>node.type==='li'&&node.props.className==='ck-stage').length,6);
-    const here=hostNodes(tree).find(node=>node.props['aria-current']==='step');
+    const workspace=nested(mounted,tree,'WorkbenchWorkspace');
+    assert.equal(byClass(workspace,'ck-desk-phases')[0].children.length,6);
+    const here=hostNodes(workspace).find(node=>node.props['aria-current']==='step');
     assert.match(textOf(here), /Part views/);
-    hostNodes(here).find(node=>node.type==='button').props.onClick();
+    btn(workspace,'Qwen / Anima / NovelAI and AA').props.onClick();
     assert.equal(studio.getSnapshot().tab,'models');
     assert.equal(studio.getSnapshot().boot.projectState.activeStageId,'2_views');
     assert.equal(hostNodes(render()).some(node=>node.type==='iframe'),false);
@@ -627,21 +630,24 @@ test('every stage exposes its own material entry; desktop native path and web ra
     mounted.sandbox.window.location=new URL(desktop?'dsh-app://app/':'http://127.0.0.1:51886/');
     mounted.sandbox.window.__DSH_HOST_PATHS__={pathFor(input){assert.equal(input,file);pathForCalls++;return 'D:/外部/外部素材.png';}};
     mounted.sandbox.window.__DSH_DIRECTORY_PICKER__={pick:async()=>dir};
-    const boot={version:'0.5.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
+    const boot={version:'0.6.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
       projectState:{stateRevision:1,activeStageId:'1_concept',stages:{},assets:{items:[],selected:{}},materials:{items:[],selected:{}}},projectSummary:{}};
     studio.set({boot,loaded:true});studio.put('projectDir',dir);
     mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?boot:{ok:true});};
     const panel=()=>mounted.runtime.render(mounted.main.component,mounted.face);
     let tree=panel();assert.equal(byClass(tree,'ck-page')[0].props['data-shell'],desktop?'desktop':'web');
-    const steps=byClass(tree,'ck-stage-list').flatMap(n=>hostNodes(n).filter(child=>child.type==='button' && textOf(child)==='Import at this step'));
-    assert.equal(steps.length,6);
+    const workspace=()=>nested(mounted,panel(),'WorkbenchWorkspace');
+    assert.equal(byClass(workspace(),'ck-desk-phases')[0].children.length,6);
     const folder=hostNodes(tree).find(n=>n.type==='button' && textOf(n)==='Choose project folder');
     assert.equal(!!folder,desktop);
     if(folder){folder.props.onClick();await new Promise(setImmediate);assert.equal(new URL(calls.pop().url).searchParams.get('projectDir'),dir);}
-    for (const [i,step] of steps.entries()) {step.props.onClick();assert.equal(studio.getSnapshot().form.materialStage,PIPELINE_STAGES[i].id);}
-    steps[0].props.onClick();
-    const nested=hostNodes(panel()).find(node=>typeof node.type==='function'&&node.type.name==='MaterialWorkspace');
-    tree=mounted.runtime.render(nested.type,nested.props);
+    for (let i=0;i<6;i++) {
+      studio.set({tab:'pipeline'});byClass(workspace(),'ck-desk-phases')[0].children[i].props.onClick();
+      btn(workspace(),'Register stage inputs').props.onClick();assert.equal(studio.getSnapshot().form.materialStage,PIPELINE_STAGES[i].id);
+    }
+    studio.set({tab:'pipeline'});byClass(workspace(),'ck-desk-phases')[0].children[0].props.onClick();btn(workspace(),'Register stage inputs').props.onClick();
+    const materialNode=hostNodes(panel()).find(node=>typeof node.type==='function'&&node.type.name==='MaterialWorkspace');
+    tree=mounted.runtime.render(materialNode.type,materialNode.props);
     assert.equal(byClass(tree,'ck-material-steps')[0].children.length,6);
     const picker=hostNodes(tree).find(n=>n.type==='input'&&n.props.type==='file');assert.equal(picker.props.accept,'.png');
     picker.props.onChange({target:{files:[file],value:'picked'}});await new Promise(setImmediate);
@@ -659,12 +665,12 @@ test('every stage exposes its own material entry; desktop native path and web ra
   }
 });
 
-test('the 0.5.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
+test('the 0.6.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
   const storage=new Map();const mounted=await mount({storage});const studio=mounted.face.studio;
-  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.5.0',activeProjectDir:'/test',sessionToken:'fixture'});
+  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.6.0',activeProjectDir:'/test',sessionToken:'fixture'});
   const wrong=await studio.act(()=>studio.refresh(true));
   assert.equal(wrong,undefined);assert.equal(studio.getSnapshot().boot,null);
-  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.5\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
+  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.6\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
   studio.put('base','http://127.0.0.1:52886');
   const correct=await studio.act(()=>studio.refresh(true));assert.equal(correct.sessionToken,'fixture');
   assert.equal(studio.getSnapshot().result.sessionToken,undefined);

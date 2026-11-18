@@ -306,6 +306,117 @@ def material_check():
     require(checked>0,'No render materials found')
     notes.append('Material operation validates existing materials and packed texture availability; it does not claim automatic texture reconstruction.')
 
+def ancestors(obj):
+    while obj.parent is not None:
+        obj=obj.parent
+        yield obj
+
+
+def bound_to(obj, arm):
+    return any(m.type == 'ARMATURE' and m.object == arm for m in obj.modifiers) or arm in ancestors(obj)
+
+
+def fit_foundation():
+    # Stretch the existing rig and its associated meshes together; never change indices/UVs/groups.
+    arm = rig()
+    body = bpy.context.scene.objects.get(P['bodyObject'])
+    require(body is not None and body.type == 'MESH' and bound_to(body, arm), 'Choose an existing body mesh bound to the selected rig')
+    meshes = [o for o in bpy.context.scene.objects if o.type=='MESH' and bound_to(o,arm)]
+    keep = P.get('keepMeshes')
+    if keep:
+        require(all(any(x.name==n for x in meshes) for n in keep), 'Keep-list must name meshes on the selected rig')
+        for obj in meshes:
+            if obj.name not in keep:
+                obj.hide_render = True
+                obj.hide_set(True)
+                obj['studio_foundation_reference'] = True
+            elif obj.get('studio_foundation_reference'):
+                obj.hide_render=False
+                obj.hide_set(False)
+                del obj['studio_foundation_reference']
+    factors = tuple(P.get('scale', (1.,1.,1.)))
+    scales = P.get('shapeValues', [])
+    if scales:
+        keys = body.data.shape_keys
+        require(keys is not None and keys.use_relative, 'Selected body does not have relative shape keys')
+        driven = {fc.data_path for fc in keys.animation_data.drivers} if keys.animation_data else set()
+        for value in scales:
+            key = keys.key_blocks.get(value['key'])
+            require(key and key != keys.reference_key and key.path_from_id('value') not in driven and key.slider_min <= value['value'] <= key.slider_max, 'Not a writable body shape: '+value['key'])
+            key.value = value['value']
+    bpy.context.view_layer.update()
+    points = [body.matrix_world @ Vector(v) for v in body.bound_box]
+    floor = min(v.z for v in points)
+    if factors != (1.,1.,1.):
+        pivot=Vector(((min(v.x for v in points)+max(v.x for v in points))*.5,
+                      (min(v.y for v in points)+max(v.y for v in points))*.5,floor))
+        nodes = set([arm]+meshes)
+        roots = [o for o in nodes if not any(p in nodes for p in ancestors(o))]
+        group = bpy.data.objects.new('Studio_FoundationFit', None)
+        bpy.context.scene.collection.objects.link(group)
+        group.location=pivot
+        bpy.context.view_layer.update()
+        for obj in roots:
+            world=obj.matrix_world.copy()
+            obj.parent=group
+            obj.parent_type='OBJECT'
+            obj.matrix_parent_inverse=Matrix.Identity(4)
+            obj.matrix_world=world
+        group.scale=factors
+        bpy.context.view_layer.update()
+        result=min((body.matrix_world @ Vector(v)).z for v in body.bound_box)
+        require(abs(result-floor)<.0001, 'Foot-anchor check failed; no new revision activated')
+    notes.append('Existing body/Rig adjusted together (X,Y,Z); vertex order, UV and weights are retained. Recheck joints, fit and neck visually.')
+
+
+def append_foundation_head():
+    material=C['material']
+    arm=rig()
+    bind=P['headBone']
+    require(bind in arm.data.bones, 'Named head bone is not present in the current rig')
+    replace=[]
+    for name in P.get('replaceHeadObjects',[]):
+        obj=bpy.context.scene.objects.get(name)
+        require(obj and obj.type=='MESH' and bound_to(obj,arm), 'Old head mesh not found on the active rig: '+name)
+        replace.append(obj)
+    before={obj.as_pointer() for obj in bpy.data.objects}
+    with bpy.data.libraries.load(material['path'],link=False) as (source,target):
+        require(all(name in source.objects for name in P['objects']), 'A named head object is not in this library')
+        target.objects=P['objects']
+    meshes=target.objects
+    require(all(o and o.type=='MESH' and o.as_pointer() not in before for o in meshes), 'The selected head entries must be new Blender mesh objects')
+    group = bpy.data.collections.new('Studio_Head_Source')
+    bpy.context.scene.collection.children.link(group)
+    for obj in meshes:
+        group.objects.link(obj)
+    bpy.context.view_layer.update()
+    # Existing topology, UVs and expression keys remain; a different skeleton is not treated as compatible.
+    # This is rigid head-follow fit, not facial bone or eye weight retargeting.
+    shift=Vector(P.get('translation',(0,0,0)))
+    scale=P.get('scale',(1,1,1))
+    pivot=arm.matrix_world @ arm.data.bones[bind].head_local
+    fit=Matrix.Translation(pivot+shift) @ Matrix.Diagonal((*scale,1)) @ Matrix.Translation(-pivot)
+    for obj in meshes:
+        world=fit @ obj.matrix_world.copy()
+        for mod in list(obj.modifiers):
+            if mod.type=='ARMATURE':obj.modifiers.remove(mod)
+        # Rig-independent head meshes preserve morph data; object constraints from the old rig are dropped.
+        for constraint in list(obj.constraints):obj.constraints.remove(constraint)
+        obj.parent=arm
+        obj.parent_type='BONE'
+        obj.parent_bone=bind
+        obj.matrix_parent_inverse=Matrix.Identity(4)
+        bpy.context.view_layer.update()
+        obj.matrix_world=world
+        obj.hide_render=False
+        obj.hide_set(False)
+        obj['avatar_studio_material_id']=material['id']
+    for obj in replace:
+        obj.hide_render=True
+        obj.hide_set(True)
+    notes.append('Appended the named head meshes with UVs and shape keys; rigid head-bone follow only. Face/eye rig, seam and apparent shading need separate checks.')
+
+
 def append_material_mesh():
     material = C['material']
     before = {obj.as_pointer() for obj in bpy.context.scene.objects}
@@ -365,6 +476,11 @@ def audit():
                 total=sum(g.weight for g in v.groups if g.group in deform)
                 unweighted+=int(total<0.00001)
                 not_normalized+=int(abs(total-1)>0.01)
+            keys=obj.data.shape_keys
+            row['shapeKeyCount']=len(keys.key_blocks)-1 if keys else 0
+            row['shapeKeys']=([{'name':k.name,'value':round(k.value,4)} for k in keys.key_blocks if k!=keys.reference_key][:80] if keys else [])
+            row['quadFaces']=sum(1 for poly in obj.data.polygons if len(poly.vertices)==4)
+            row['uvLayers']=len(obj.data.uv_layers)
             row.update(vertices=len(obj.data.vertices),faces=len(obj.data.polygons),unweighted=unweighted,nonNormalized=not_normalized,materials=[s.material.name if s.material else None for s in obj.material_slots],modifiers=[m.type for m in obj.modifiers])
         else:
             row['bones']=[b.name for b in obj.data.bones]
@@ -419,6 +535,10 @@ try:
             require(obj is not None and obj.type=='MESH','Explicit mesh selection required: '+name)
             obj.scale=Vector([a*b for a,b in zip(obj.scale,P.get('scale',[1,1,1]))])
             obj.location+=Vector(P.get('translation',[0,0,0]))
+    elif operation=='fit_foundation':
+        fit_foundation()
+    elif operation=='append_foundation_head':
+        append_foundation_head()
     elif operation=='append_material_mesh':
         append_material_mesh()
     elif operation=='apply_material_texture':

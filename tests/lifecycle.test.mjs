@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { apply } from '../lib/index.js';
 
 // Exercise resource ownership without a UI renderer or profile mutation.
-test('Host lifecycle registers six tools and a readable skill, then disposes everything', async () => {
+test('Host lifecycle registers seven tools and a readable skill, then disposes everything', async () => {
   const registered = new Map(); let effectCleanup, factory, providerDisposed = false;
   const ctx = {
     effect(fn) { effectCleanup = fn(); },
@@ -11,7 +11,7 @@ test('Host lifecycle registers six tools and a readable skill, then disposes eve
     skills: { registerProvider(fn) { factory = fn; return () => { providerDisposed = true; }; } },
   };
   apply(ctx, { autoStart: false });
-  assert.equal(registered.size, 6);
+  assert.equal(registered.size, 7);
   const provider = factory({});
   const candidates = await provider.list({});
   assert.equal(candidates.length, 1);

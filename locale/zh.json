@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio 角色工作台",
-    "description": "0.4.0 实验版：独立 DSH 角色工作台。六工序、同朝向头体对照、本机与可选云端生图适配、DSH 会话草稿、不覆盖源文件的 Blender 修订。云端默认关闭；脚本和结构校验不等于视觉验收。",
+    "description": "0.6.0 实验版：原画重建／素体改型双路线，六关外部素材，按 Blender 修订接力的独立 AI 静帧渲染。默认本机且不上传；运行结果需人工审阅。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

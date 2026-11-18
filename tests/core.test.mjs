@@ -86,7 +86,7 @@ test('credentials: missing object is unconfigured, writes use Host store, status
 
 test('Tool schema forbids Agent review approval and secrets; degraded stays nonpass', async () => {
   const tools = buildStudioTools();
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 7);
   const project = tools.find(t => t.name === 'charakuru_project');
   await assert.rejects(project.execute({ action: 'checkpoint', checkpointAction: 'approve' }), /checkpointAction/);
   const credentials = tools.find(t => t.name === 'charakuru_credentials');

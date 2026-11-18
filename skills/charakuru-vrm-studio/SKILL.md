@@ -7,6 +7,12 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 
 先读取 `charakuru_project(action="status", projectDir=...)`。工程尚未创建时使用 `action="init"`，填写角色描述和账户实际月额度。所有工具明确传入 `projectDir`；默认目录固定，不随其他会话切换。
 
+## 0.6.0 双路线与渲染接力
+
+- 原画重建沿用六关。本机 `base_mesh` 另走素体与头模选择；工作台采用已登记的 `foundation_body` 后，才用 `import_material_scene` 打开审计。已有权重和脸必须优先保留。`fit_foundation` 指定 bodyObject、armature、相对 scale、已有 shapeValues；`append_foundation_head` 另需已采用的 `foundation_head`、明确网格名和头骨，只实验性刚性头骨跟随。绑定活动 `expectedRevisionId`；不声称自动颈缝、眼动或表情匹配。
+- 素体路线只对衣、发、饰做人工工单，不上传素体/头模/工程，不跨用账本。回来的单件自包含 GLB 按角色登记、追加、定位、重查权重。
+- 渲染从独立渲染台登记请求：`charakuru_render(action="status", projectDir, requestId)` 核对要求和底图修订；再用 `action="run"`、`expectedRevisionId` 与给定 `recipe` 调整本机静帧。只允许枚举镜头、布光及有限系数。不能使用对话里的任意 Python/路径代替渲染工具，不上传，不修改 Blend。返回 `queued` 时由提交的 execution 调 `collect`，超时先对回执、不重发。颜色与构图由用户单独批准/退回；Agent 无此动作。
+
 ## 六个关卡
 
 1. `1_concept`：明确外观、预算、模型、参考图与交付要求。
