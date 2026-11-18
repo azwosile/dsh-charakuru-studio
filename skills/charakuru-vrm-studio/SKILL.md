@@ -20,17 +20,15 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 
 ## 生图
 
-`charakuru_aa_models(action="leaderboard")` 查询静态 AA 快照，`action="compile_prompts"` 编译模型提示词。快照时间为 2026-11-16，模型显示名与候选 API ID 不等价。
+`charakuru_aa_models(action="leaderboard")` 查询 2026-11-18 静态 AA v2.1 榜单与适配状态；`action="compile_prompts"` 编译逐槽提示词。基准名次不是接口、费用或视觉质量凭证。
 
-`charakuru_generate_views` 默认导出工作流。实际请求使用 `mode="execute"`，云端还需供应商实际 `apiModelOverride`。核对用户的请求和预算；已有明确执行指令时继续执行。密钥通过工作台密码框或环境变量设置，`charakuru_credentials` 只显示状态。
+`charakuru_generate_views` 默认为导出预案。实际本机 `execute` 要求稳定的 `requestId`、真实启动的服务和用户明确需求。不要猜软件、模型权重可用，不要主动安装。云端只能由用户在工作台确认单槽、授权上传及费用后启动，Agent 工具不派发付费云端生成。
 
-- Qwen：导出的 Diffusers 脚本支持参考 PNG；本地兼容生图端点为文生图。
-- Anima：基础图使用 CLIPLoader `stable_diffusion` 和 EmptyLatentImage；turbo 使用基础模型加 turbo LoRA、CFG 1、8 步。aesthetic 指定 UNet，移除 score 标签；画师使用 `@`。内置图为文生图。
-- NovelAI：API ID 明确指定；内置 Precise Reference 请求仅限 V4.5。
-- Gemini：支持内联参考 PNG。
-- OpenAI 兼容网关：协议、模型 ID 与返回格式需匹配供应商。
+- Qwen：Diffusers 预案可用原画；兼容 HTTP 文生图不传原画。`qwen-image-2.1-comfy-edit` 需要 `comfyuiQwenWorkflowPath` 和一张的工程原画。模板验证通过仍不表示模型装齐。
+- Anima：内置图为文生图。Aesthetic 正负提示均去 score_*；Turbo 使用独立模型、CFG 1/8 步。仅在用户明确允许的文生图任务设置 `referenceMode="text_only"`。
+- NovelAI V5 实验协议不传参考；V4.5 Precise Reference 单独选卡。官方 GPT/Gemini/Ark 与自配网关路由、凭据独立；榜单目录项无运行路由。
 
-生图逐张验证 PNG 后更新状态。全部失败为 `fail`，部分失败为 `degraded`；补齐缺失视图后再审阅。导出工作流不代表图像已生成。参考 PNG 仅发送到支持该输入的所选服务。
+成功产物要登记真实 PNG。重复生成已有槽位先保留新候选，不覆盖已选版本。未生成、失败、计费不确定时报告状态，不代验收、不换 ID 重发、不自动改用另一个服务。
 
 ## Tripo
 
@@ -58,8 +56,8 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 
 - `charakuru_project(action="import_asset", assetKind="image", slotId="head_front", sourcePath=..., projectDir=...)` 登记真实 PNG；`action="scan_views"` 扫描离线 11 槽位生成结果。GLB 用 assetKind="glb" 与 part。
 - 导入/归档不等于选择 GLB；请用户在资产库预览并采用头/身候选。所有图像与候选由文件 SHA-256 绑定审阅，变更后必须重新审批。
-- 0.2.0 仅开放前三阶段证据审批，后续启发式工序不允许标记为完整交付。
-- 执行前核对参考图适配能力，不把参考图丢弃后改成文生图。Qwen 在线/Anima 内置工作流不支持本适配器的参考条件；改为离线编辑后导入。
+- 当前仅开放前三阶段证据审批，后续启发式工序不允许标记为完整交付。
+- 执行前核对参考图适配能力，不把参考图丢弃后改成文生图。Qwen 通用兼容端点/Anima 内置图仅文生图；可明确选择 ComfyUI Qwen 编辑、离线 Diffusers 或手工导入。
 - `charakuru_blender_avatar(action="probe")` 探测实际协议，不从端口猜版本；多桥接冲突须先处理。
 - 3.1 GUI 执行传入已 attach/grant 的 Blender `sessionId`；DSH Host/agent/session 身份由 execution 上下文取得，禁止虚构。
 - 新队列提交后返回 jobId，使用 `charakuru_blender_avatar(action="collect_job", projectDir=...)` 收集真实产物。不要重复 run_stage。未完成、失败或身份不符时保留工程状态，按伴随工具诊断，不声称任务已成功。
@@ -68,7 +66,7 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 
 ## 0.3.0 显式编辑路线
 
-显示品牌 Avatar Studio，包/工具 ID 保持兼容。默认禁止云端执行；本地服务未连接时不要自行改用云端。生图 `requestId` 必须在重试时保持不变；新 ID 是新任务。手工账户账本不能代替供应商报价或防止外部消费。
+显示品牌 Avatar Studio，包/工具 ID 保持兼容；无需启动或调用原版。默认禁止云端执行；本地服务未连接时不要自行改用云端。生图 `requestId` 必须在重试时保持不变；新 ID 是新任务。手工账户账本不能代替供应商报价或防止外部消费。
 
 现有有权使用的 Blend 优先用 `charakuru_blender_avatar(action="editor_operation", editorOperation="import_blend", editorParams={sourceBlend,vrmAddonPath}, projectDir=...)`，不要让 legacy 高斯权重工序覆盖现有 rig。后续传入明确 expectedRevisionId。
 

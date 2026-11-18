@@ -20,7 +20,9 @@ test('image formats: valid scanlines, corrupt CRC/truncated/oversized ZIP reject
 });
 
 test('prompt compiler and Anima official graph contracts', () => {
-  assert.equal(queryModelCatalog().total, 9);
+  assert.ok(queryModelCatalog().total >= 14);
+  assert.equal(queryModelCatalog().benchmark.updatedAt, '2026-11-18');
+  assert.equal(queryModelCatalog({weights:'open_weights'}).models.find(row=>row.id==='minimax-h3-image').driver,'catalog');
   assert.equal(compileTurnaroundPromptPack().views.length, 11);
   assert.throws(() => compileTurnaroundPromptPack({ modelId: 'missing' }), /Unknown/);
   assert.throws(() => compileTurnaroundPromptPack({ slots: [] }), /slots/);
@@ -29,8 +31,8 @@ test('prompt compiler and Anima official graph contracts', () => {
   const graph = buildAnimaComfyWorkflow({ positivePrompt: 'test', negativePrompt: '' });
   assert.equal(graph[2].inputs.type, 'stable_diffusion'); assert.equal(graph[4].class_type, 'EmptyLatentImage');
   const turbo = buildAnimaComfyWorkflow({ variant: 'turbo' });
-  assert.equal(turbo[7].inputs.cfg, 1); assert.equal(turbo[10].class_type, 'LoraLoaderModelOnly');
-  assert.throws(() => buildAnimaComfyWorkflow({ variant: 'aesthetic' }), /explicitly/);
+  assert.equal(turbo[7].inputs.cfg, 1); assert.equal(turbo[1].inputs.unet_name, 'anima-turbo-v1.0.safetensors');
+  assert.equal(buildAnimaComfyWorkflow({ variant: 'aesthetic' })[1].inputs.unet_name, 'anima-aesthetic-v1.0.safetensors');
 });
 
 test('router: validates bytes, preserves cloud key isolation and reports partial failure', async t => {
@@ -43,7 +45,8 @@ test('router: validates bytes, preserves cloud key isolation and reports partial
   assert.equal(response.verdict, 'degraded'); assert.equal(response.ok, false);
   const state = (await loadProjectState(dir)).state;
   assert.equal(state.views.head_front.status, 'ready'); assert.equal(state.views.head_back.status, 'missing');
-  assert.deepEqual(await fs.readFile(path.join(dir, 'views/head/head_front.png')), png());
+  assert.match(path.basename(response.results[0].filePath), /^head_front-[a-f0-9-]{36}\.png$/);
+  assert.deepEqual(await fs.readFile(response.results[0].filePath), png());
   await assert.rejects(runTurnaroundGeneration({ projectDir: dir, modelId: 'seedream-5.5', mode: 'execute', slots: ['head_front'] }), /IMAGE_PREFLIGHT_BLOCKED/);
   await initOrUpdateProject(dir, { sourceImage: 'missing.png' });
   await assert.rejects(runTurnaroundGeneration({ projectDir: dir, mode: 'execute', slots: ['head_front'] }), /IMAGE_PREFLIGHT_BLOCKED/);

@@ -39,7 +39,7 @@ export async function readyAssetProject(dir) {
   const { initOrUpdateProject, transitionStageCheckpoint } = await import('../lib/project/state.js');
   const { importStudioAsset, selectStudioAsset } = await import('../lib/project/assets.js');
   const { REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
-  await initOrUpdateProject(dir);
+  await initOrUpdateProject(dir, { characterPrompt: 'Procedural avatar fixture for checkpoint tests' });
   async function approve() { await transitionStageCheckpoint(dir,{action:'request_review'});await transitionStageCheckpoint(dir,{action:'approve',actor:'user'}); }
   await approve();
   for (const slot of REQUIRED_VIEW_SLOTS) await importStudioAsset({projectDir:dir,slotId:slot.id,dataBase64:png().toString('base64')});

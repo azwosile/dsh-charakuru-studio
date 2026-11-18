@@ -15,7 +15,7 @@ test('actual loopback HTTP: isolated projects, user review and request boundarie
   const post = (route, body, headers = {}) => fetch(srv.baseUrl + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Charakuru-Session': sessionToken, ...headers }, body: JSON.stringify(body) });
   const health = await (await fetch(srv.baseUrl + '/health')).json();
   assert.equal(health.plugin, 'dsh-charakuru-studio');
-  assert.equal((await post('/studio/project/init', { projectDir: a, projectName: 'Alpha', monthlyCreditAllowance: 0 })).status, 200);
+  assert.equal((await post('/studio/project/init', { projectDir: a, projectName: 'Alpha', characterPrompt: 'A text-only avatar fixture', monthlyCreditAllowance: 0 })).status, 200);
   await post('/studio/project/init', { projectDir: b, projectName: 'Beta' });
   const loaded = await (await fetch(srv.baseUrl + '/studio/bootstrap?projectDir=' + encodeURIComponent(a))).json();
   assert.equal(loaded.projectState.projectName, 'Alpha'); assert.equal(loaded.projectSummary.remainingFreeCredits, 0);
@@ -26,6 +26,12 @@ test('actual loopback HTTP: isolated projects, user review and request boundarie
   await post('/studio/project/checkpoint', { projectDir: a, action: 'approve' });
   assert.equal((await loadProjectState(a)).state.activeStageId, '2_views');
   assert.equal((await loadProjectState(b)).state.activeStageId, '1_concept');
+  const execute = { projectDir:a, mode:'execute', modelId:'novelai-v5-cloud', requestId:'revision-fixture-only', cloudConfirmed:true, slots:['head_front'] };
+  const missingRev = await post('/studio/views/generate',execute);
+  assert.equal(missingRev.status,400); assert.match(JSON.stringify(await missingRev.json()),/绑定当前工程版本/);
+  const staleRev = await post('/studio/views/generate',{...execute,expectedRevision:loaded.projectState.stateRevision});
+  assert.equal(staleRev.status,400); assert.match(JSON.stringify(await staleRev.json()),/工程已变更/);
+  assert.equal((await loadProjectState(a)).state.imageRequests,undefined);
   const foreign = await post('/studio/project/init', { projectDir: a }, { Origin: 'https://example.com' });
   assert.equal(foreign.status, 403); assert.equal(foreign.headers.get('Access-Control-Allow-Origin'), null);
   assert.equal((await post('/studio/project/init', {}, { 'Content-Type': 'text/plain' })).status, 415);

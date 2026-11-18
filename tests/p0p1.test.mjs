@@ -12,6 +12,7 @@ import { detectCompanion, executeCompanionStage, collectCompanionJob, callerFrom
 import { probeBlenderPluginLink, runBlenderAvatarStage, collectBlenderAvatarJob } from '../lib/blender/bridge.js';
 import { startStudioHttpServer } from '../lib/host/server.js';
 import { createProjectRegistry } from '../lib/project/registry.js';
+import { planTripoFreeQuotaRun } from '../lib/tripo/free-quota-scheduler.js';
 const caller = { hostId:'fixture-host', dshSessionId:'fixture-session', agentId:'fixture-agent', role:'main' };
 const gateway = { linked:true, baseUrl:'http://127.0.0.1:39877', protocol:'gateway-3.1', health:{ok:true,gateway:{hostId:caller.hostId}}, guiReady:true };
 const approve = async dir => { await transitionStageCheckpoint(dir,{action:'request_review'}); return transitionStageCheckpoint(dir,{action:'approve',actor:'user'}); };
@@ -19,7 +20,7 @@ const image = (dir, slotId='head_front') => importStudioAsset({projectDir:dir,sl
 
 test('P0 preflight blocks unsupported reference editing before any network side effects', () => {
   for(const modelId of ['qwen-image-2.1-local','comfyui-anima-local','seedream-5.5','novelai-v5-cloud']) assert.equal(imagePreflight({modelId,apiModelOverride:'fixture-v5',hasReference:true}).allowed,false);
-  assert.equal(imagePreflight({modelId:'novelai-v5-cloud',apiModelOverride:'nai-diffusion-4-5-full',hasReference:true}).allowed,true);
+  assert.equal(imagePreflight({modelId:'novelai-v45-reference',apiModelOverride:'nai-diffusion-4-5-full',hasReference:true,slots:['head_front']}).allowed,true);
   assert.equal(imagePreflight({hasReference:true,mode:'plan_and_export_workflows'}).allowed,true);
   assert.equal(imagePreflight({modelId:'unknown'}).allowed,false);
 });
@@ -88,19 +89,25 @@ test('P1 PNG import refuses invalid bytes and stale project revisions', async t 
 });
 
 test('P1 all eleven slots required; image replacement invalidates review and downstream stages', async t => {
-  const dir=await tempProject(t);await initOrUpdateProject(dir);await approve(dir);
+  const dir=await tempProject(t);await initOrUpdateProject(dir,{characterPrompt:'Fixture: text-only avatar'});await approve(dir);
   await assert.rejects(transitionStageCheckpoint(dir,{action:'request_review'}),/尚未登记/);
   for(const slot of REQUIRED_VIEW_SLOTS)await image(dir,slot.id);
   await approve(dir); assert.equal((await loadProjectState(dir)).state.activeStageId,'3_tripo');
   // Selecting a historical image is an explicit review-changing action.
   const state=(await loadProjectState(dir)).state;
+  const plan = (await planTripoFreeQuotaRun({projectDir:dir})).studioWebPlaybook;
+  assert.equal(plan.viewsApproved,true);
+  assert.equal(plan.stages[0].inputFiles[0],path.join(dir,state.views.head_front.filePath));
+  assert.equal(plan.stages[1].inputFiles.length,4);
   await selectStudioAsset({projectDir:dir,assetId:state.views.head_front.assetId});
+  const pending = (await planTripoFreeQuotaRun({projectDir:dir})).studioWebPlaybook;
+  assert.equal(pending.viewsApproved,false);assert.deepEqual(pending.stages[0].inputFiles,[]);
   assert.equal((await loadProjectState(dir)).state.activeStageId,'2_views');
   assert.equal((await loadProjectState(dir)).state.stages['3_tripo'].status,'pending');
 });
 
 test('P1 evidence detects on-disk mutation between request and approve', async t => {
-  const dir=await tempProject(t);await initOrUpdateProject(dir);await approve(dir);
+  const dir=await tempProject(t);await initOrUpdateProject(dir,{characterPrompt:'Fixture: text-only avatar'});await approve(dir);
   for(const slot of REQUIRED_VIEW_SLOTS)await image(dir,slot.id);
   await transitionStageCheckpoint(dir,{action:'request_review'});
   const s=(await loadProjectState(dir)).state;await fs.writeFile(path.join(dir,s.views.head_front.filePath),'changed');
@@ -108,7 +115,9 @@ test('P1 evidence detects on-disk mutation between request and approve', async t
 });
 
 test('P1 source-image bytes are part of concept approval evidence', async t => {
-  const dir=await tempProject(t);await fs.writeFile(path.join(dir,'reference.png'),png());await initOrUpdateProject(dir,{sourceImage:'reference.png'});
+  const dir=await tempProject(t);await initOrUpdateProject(dir);
+  await assert.rejects(transitionStageCheckpoint(dir,{action:'request_review'}),/空白概念/);
+  await fs.writeFile(path.join(dir,'reference.png'),png());await initOrUpdateProject(dir,{sourceImage:'reference.png'});
   await transitionStageCheckpoint(dir,{action:'request_review'});await fs.appendFile(path.join(dir,'reference.png'),'changed');
   await assert.rejects(transitionStageCheckpoint(dir,{action:'approve',actor:'user'}),/evidence changed/);
 });

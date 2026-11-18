@@ -1,7 +1,7 @@
-# Avatar Studio 0.3.1
+# Avatar Studio 0.4.0
 
-Independent local-first DSH avatar workbench. The legacy package/tool IDs are retained for compatibility. Includes immutable Blender editing revisions, offline Three.js / VRM viewing, explicit weight and spring operations, and a manual cross-project account ledger.
+A standalone DSH workbench for character production. Six stages, same-angle part review, eleven reference slots, single-slot repair, DSH conversation drafts, immutable Blender revisions and a manual credit ledger. Package and tool IDs remain compatible. No Charakuru runtime is required. Cloud execution is off by default.
 
-**Experimental, not full production acceptance.** Real Blender 5.3 + companion 3.0.6 runs verified revision saves, scaling/rollback, weight processing and VRM structural export. Motion quality and varied clothing still require visual acceptance. Cloud execution is disabled by default; production image APIs remain unverified. The manual ledger does not query provider balances or control external spending.
+**Experimental.** The first three checkpoints use artifact evidence. Modeling, motion and final exports still require real-character and independent viewer review. Provider protocol coverage is not proof of live execution.
 
-See [installation](INSTALL-WINDOWS.md), [operations](OPERATIONS.md), and [release evidence](RELEASE-0.3.0.md).
+[Installation](INSTALL-WINDOWS.md) · [0.4.0 workflow](WORKFLOW-0.4.0.md) · [Operations](OPERATIONS.md) · [Evidence for this build](VERIFICATION-0.4.0.md)

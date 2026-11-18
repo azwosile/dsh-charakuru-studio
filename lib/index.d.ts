@@ -4,6 +4,7 @@ export interface CharakuruStudioConfig {
   autoStart?: boolean;
   blenderPluginUrl?: string;
   comfyuiUrl?: string;
+  comfyuiQwenWorkflowPath?: string;
   qwenImageUrl?: string;
   openaiCompatBaseUrl?: string;
   defaultImageModel?: string;
@@ -11,7 +12,7 @@ export interface CharakuruStudioConfig {
 }
 
 export declare const name: 'dsh-charakuru-studio';
-export declare const inject: { required: string[]; optional: string[] };
+export declare const inject: string[];
 export declare const Config: unknown;
 export declare function apply(ctx: unknown, config?: CharakuruStudioConfig): void;
 export declare const __internals: Record<string, unknown>;

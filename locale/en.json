@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio",
-    "description": "Independent local-first avatar workbench. Experimental 0.3.1: immutable Blender revisions, offline Three.js/VRM preview, explicit weight/spring tools and manual account ledger. Cloud execution disabled by default. Visual acceptance is required.",
+    "description": "0.4.0 experimental: a native DSH character workbench with six stages, paired part views, local and optional cloud image adapters, DSH drafts and immutable Blender revisions. Cloud is off by default; structural success is not visual approval.",
     "detail": "docs/DETAIL.md"
   }
 }

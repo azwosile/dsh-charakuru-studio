@@ -1,7 +1,7 @@
 {
   "name": "dsh-charakuru-studio",
-  "version": "0.3.2",
-  "description": "Avatar Studio: independent local-first DSH avatar workbench with immutable Blender revisions, offline Three.js/VRM preview and conservative manual budget ledger. Experimental release; cloud adapters unverified and disabled by default.",
+  "version": "0.4.0",
+  "description": "Avatar Studio: native DeepSeek Harness character workflow, model adapters, human checkpoints and immutable Blender revisions. Experimental; cloud execution off by default.",
   "license": "MIT",
   "author": {
     "name": "azwosile",
@@ -47,7 +47,6 @@
     "tests/fixtures.mjs",
     "scripts/build-client.mjs",
     "src",
-    "scripts/*.mjs",
     "NOTICE"
   ],
   "scripts": {

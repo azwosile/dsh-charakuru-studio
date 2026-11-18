@@ -1,45 +1,36 @@
 # Avatar Studio for DSH
 
-独立、本地优先的角色制作工作台。**0.3.2 是实验构建，不是 P2～P5 全量验收完成版。** 原 npm 包名 `dsh-charakuru-studio`、工具 ID 和工程文件名保留，避免破坏升级；显示品牌为 Avatar Studio。项目与 Charakuru、DSH、Tripo 没有官方隶属或背书关系。
+**0.4.0 · 实验版。** 这是一个独立的 DSH 角色制作工作台。参考 Charakuru 的人机交替流程，用 DeepSeek Harness 会话和本插件工具接力；不打开、内嵌、代理或启动原版，也不需要 Codex。保留原包名 `dsh-charakuru-studio`、工具 ID 和 `project.charastudio.json` 方便升级。与 DSH、Charakuru 或 Tripo 没有官方隶属关系。
 
-## 已提供的工作流
+## 在工作台里怎么做
 
-- 独立原画位和 11 槽参考图库、面板内 PNG 预览、PNG/GLB 文件校验、明确头体选择、最近工程与哈希绑定审批。
-- 离线打包的 Three.js / three-vrm 视图：材质、纹理、蒙皮、正侧背相机、参考叠图、对象选择。外部模型资源 URL 被阻止，请嵌入 GLB。
-- 现有 Blend 独立导入路线：通过 companion 另存不可变版本，头/发联动缩放、对象变换、回滚；不会覆盖源 Blend。
-- AI 修改请求记录工程版本、对象、相机与输入哈希。可直接插入当前 DSH 会话草稿，不自动发送；Agent 使用已绑定的结构化工具执行后回到工作台接受或回退。
-- 显式材质检查、同项目源网格权重转移、权重归一化、humanoid 映射、SpringBone/胶囊碰撞/裙骨分支、VRM 导出。错误定位至对象/顶点，结构通过不代表成品质量。
-- 跨工程账户账本：手工报价、限额、保留/提交/未知/结算/取消状态；Studio/API 分账。**它没有自动查询供应商余额，也未与全部执行路径联动，不能约束外部网页消费。**
+1. **原画和设定**：选择新工程，登记有权使用的 PNG。原画不占 11 槽；纯文生图可以只写角色设定，空概念不能送审。写清角色外观和用途；预算不明时填 0。
+2. **拆件图**：在「模型与视图」选驱动和目标槽，查看用途、协议、提示词与预审。先做头/体的正面，再修正侧背；在「图片与模型库」用同方向头体对照图，另看三张全身比例图。`补做此图` 直接定位槽位。计划不会改进度；替代图先登记候选，手动导入与扫描不覆盖旧选择。
+3. **头体候选**：使用已有合法自包含 GLB，或人工核对 Tripo Studio 后生成并下载；预算预案只列真实、已批准的 8 张头体图路径。工作台记录报价或实际消耗、归档和指纹。预览并明确采用一头一体；归档不等于选定。
+4. **装配与比例**：用 companion 对已审阅的候选做 Blender 前处理，再接过同工程检查点；已有 Blend 可直接导入独立修订。面板提供可离线加载的 Three.js/VRM 视口、正侧背相机、参考叠图、对象选择和回滚。
+5. **权重、材料与动作**：保留已有 rig；显式物料检查、权重转移与归一化、humanoid、SpringBone/碰撞及姿态探针。不能用工具进程成功代替视觉检修。
+6. **导出和复核**：导出 VRM 1.0 的结构或容器校验不等于最终交付。作者、使用条款、真实动作、外部查看器结果需独立核对；启发式 23 表情不是交付前提。
 
-## 安装与运行
+「工程与关卡」和版本级「AI 修改请求」都能准备**当前 DSH 会话草稿**，不自动发送、不会代用户批准。用户发送后，Agent 用本插件技能与工具记录结果。未保留会话时，阶段指令可复制；已登记的版本修改可重新准备草稿。**前三关**有哈希绑定的审批；后三关有实验工序和版本审阅，尚不能在项目进度中标记为验收完成。
 
-使用 DSH **Electron 应用的「插件 → 添加插件」**，输入 `dsh-charakuru-studio-0.3.2.tgz` 的本地完整路径，安装并立即启用。桌面 profile 不支持用 CLI 安装；不要手改 profile 依赖绕过。
+## 生图与费用
 
-目标环境：DSH 0.2.2-rc.3 / Node 22+。本机实测 companion 3.0.6 + Blender 5.3.0；3.1 Gateway 适配只有协议测试，未在该机器验收。companion 未被升级。详见 [安装、升级与卸载](docs/INSTALL-WINDOWS.md)。
+| 选项 | 当前适配 | 默认边界 |
+| --- | --- | --- |
+| Qwen-Image-2.1 Local / Diffusers | 本地兼容端点文生图；导出 CUDA 参考编辑脚本 | 脚本不自动运行 |
+| Qwen-Image-2.1 ComfyUI Edit | 导出并预审单参考 API 模板；在 loopback 上传、排队和领取 PNG | 需配置 `comfyuiQwenWorkflowPath`、服务与权重 |
+| Anima Base / Aesthetic / Turbo | 本机独立权重工作流；按分支选 sampler/CFG | 内置图只做文生图 |
+| NovelAI V5 / V4.5 | V5 multipart 文生图；V4.5 独立 Precise Reference | 社区协议，账号与收费未实测；V5 不传原画 |
+| OpenAI Images / Google Gemini / 火山方舟 | 官方文档协议的文生图与单参考编辑 | 账号、地区、材料上传和实际费用须单独核对 |
+| 自配网关；其他榜单模型 | 网关可配置 HTTPS 文生图 (PNG `b64_json`)；目录项可导出提示词 | 不根据榜名猜路由/模型 ID，不追随下载 URL |
 
-打开侧栏 **Avatar Studio 工作台**，默认 API 为 `http://127.0.0.1:9886`。支持同机网页端和桌面端的 DSH 客户端面板；资产、预览和建模工具不需要 CDN。
+`allowCloudExecution` 默认关闭。付费路径只在用户从工作台确认单槽、明确 API ID 与凭据后调用；Agent 可以规划、导出或运行明确获准的本机模型，但不会自动发付费请求。不得将超时当作未扣费。保留请求 ID，核对旧回执和供应商记录后才换 ID。账户账本手工维护，不能拦截外部消费；Studio 与 OpenAPI 分账，公开性和商业权以实际账户与现行条款为准。
 
-### 可选：工作台内显示自备 Charakuru
+详细步骤、配置和核验边界见 [0.4.0 原生流程](docs/WORKFLOW-0.4.0.md) · [建模工序](docs/OPERATIONS.md) · [安装、升级与卸载](docs/INSTALL-WINDOWS.md) · [0.4.0 验证记录](docs/VERIFICATION-0.4.0.md)。
 
-「原版 Charakuru（本机）」只显示用户依照上游许可自行启动的 `http://127.0.0.1:8766/`。点击载入，不跳到外部浏览器。此入口仅支持 DSH 桌面端或在 DSH 主机本机打开的网页端；不会代理远端 Kit、修改 CSP、自动安装原版或同步两边工程。宿主或 Kit 禁止内嵌时请保留安全策略，使用原生工作台。此插件不分发 [上游许可证](https://github.com/nanocle/Charakuru/blob/main/LICENSE) 覆盖的原版应用、Skill 或 donor；原版请求不会被自动接管。
+## 安装与开发
 
-### 最短零云额度路线
-
-1. 建立独立工程目录，导入自己有权使用的 PNG / GLB；不要提交私有素材到公开仓库。
-2. 在「三维编辑与生产」选择已有 `.blend`，或点击「从 Blender 检查点接力」载入本工程已指纹校验的检查点；按需配置官方 VRM Add-on。
-3. 选择 `head_scale`，参数 `{"factor":0.95,"armature":"你的骨架","headBone":"head","pivotBone":"neck"}`。成功后刷新为新版本；回滚切换版本指针，不删除历史。
-4. 保存相机、参考叠图；重载工程核对版本、输入对象和参考图。
-5. 按 [工序与故障指南](docs/OPERATIONS.md) 显式处理权重与 VRM。每步检查审计和外观；不要把动作探针当穿模验收。
-
-## 生图与额度边界
-
-`allowCloudExecution` 默认 `false`。本地驱动只允许 HTTP loopback 地址；该限制不能保证你配置的本地代理不会转发到云端。先确认服务确实在本地运行。
-
-Qwen / Anima 本机默认端口本轮不可达，因此没有真实生图样例。NovelAI、OpenAI-compatible、Gemini、Tripo 云端均没有调用，**没有消耗云额度**。接口适配和工作流导出属于实验能力，不公开宣称生产驱动已通过验收。
-
-UI 中生图任务有显式 request ID；重试请保留同一 ID。已开始或计费不明的任务拒绝重新提交；收到结果的相同请求返回已有回执。换 ID 是新任务，必须先核对旧任务。服务重试、供应商退款、生产 429/余额/跨进程云并发还未认证。不要因本地测试通过而启用无人值守付费生成。
-
-## 开发与验证
+目标 DSH 0.2.2-rc.3 / Node 22+。Electron 应用从「插件 → 添加插件」用本地 `dsh-charakuru-studio-0.4.0.tgz` 安装并启用。同机网页端与桌面端使用同一客户端席位契约；0.4.0 的真实双端安装和 renderer 验收未完成。不要用 CLI 改 desktop profile。工作台默认 HTTP 回环端口 9886，另装 companion、Blender 和 VRM Add-on。现有 9877 legacy companion 与 3.1 Gateway 分开探测，后者需要真实 DSH execution 上下文，不能由面板伪造。
 
 ```bash
 npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
@@ -48,8 +39,4 @@ npm test
 npm run check
 ```
 
-编辑 `src/client-shell.js` 与 `lib/client-preview.js` 后重新 build；`lib/client.js` 是生成文件。运行时依赖离线内嵌；Three.js、three-vrm 许可证见 [NOTICE](NOTICE)。VRM Add-on、Blender 和 DSH 单独安装，不随包分发。
-
-[发布与验收矩阵](docs/RELEASE-0.3.0.md) · [工序指南](docs/OPERATIONS.md) · [安装升级卸载](docs/INSTALL-WINDOWS.md) · [LICENSE](LICENSE)
-
-MIT 仅覆盖本仓库原创代码及相应许可组件；不授予模型权重、服务、输入角色或输出资产的使用权。不包含受限 Kit、第三方 donor 模型、用户角色、密钥或账户配置。
+修改 `src/client-shell.js` 与 `lib/client-preview.js` 后重建 `lib/client.js`。插件内置离线 Three.js / three-vrm，许可证见 [NOTICE](NOTICE)。MIT 仅覆盖本仓库原创代码及相应依赖，不授予第三方代码、模型权重、服务或角色使用权；不分发受限原版实现、donor、用户资产或凭据。

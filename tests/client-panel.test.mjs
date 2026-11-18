@@ -302,10 +302,10 @@ test('the page renders a workbench shell with a tab rail and no dialog chrome', 
   assert.equal(headings.length, 1);
   assert.equal(textOf(headings[0]).trim(), 'Character → VRM studio');
 
-  // 8 tabs, exactly one selected, all pointing at the same panel region.
+  // 7 tabs, exactly one selected, all pointing at the same panel region.
   const tabs = byRole(tree, 'tab');
-  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false, false]);
-  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1, -1]);
+  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false]);
+  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1]);
   assert.equal(textOf(tabs[0]).includes('Project & reviews'), true);
   const rail = byRole(tree, 'tablist')[0];
   assert.equal(rail.props['aria-orientation'], 'vertical');
@@ -352,13 +352,13 @@ test('tabs switch, keep state across remounts and follow the active language', a
   });
 
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
   assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-model')), true, 'model picker is on screen');
   assert.equal(studio.getSnapshot().tab, 'models');
 
   // A fresh mount reuses the same store: the workbench does not reset on navigation.
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
 
   // Language switch: labels resolve through the locale service on both surfaces.
   mounted.harness.setLanguage('zh');
@@ -374,11 +374,11 @@ test('tabs switch, keep state across remounts and follow the active language', a
     current.props.onKeyDown({ key: name, preventDefault() {} });
     return studio.getSnapshot().tab;
   };
-  assert.equal(press('End'), 'kit');
+  assert.equal(press('End'), 'credentials');
   assert.equal(press('ArrowDown'), 'pipeline');
-  assert.equal(press('ArrowUp'), 'kit');
+  assert.equal(press('ArrowUp'), 'credentials');
   assert.equal(press('Home'), 'pipeline');
-  assert.equal(press('ArrowLeft'), 'kit');
+  assert.equal(press('ArrowLeft'), 'credentials');
 });
 
 test('inserting instructions appends to the draft of the session the main view retains', async () => {
@@ -560,29 +560,33 @@ test('active project identity persists across a fresh client instance', async()=
   assert.ok(hostNodes(again).some(n=>n.type==='input'&&n.props.value==='D:/Second project'));
 });
 
-test('local Kit is opt-in, framed in both DSH local contexts, and never proxied by the client', async () => {
-  for (const origin of ['http://127.0.0.1:51886/', 'dsh-app://app/', 'https://dsh.example.org/', 'http://127.0.0.1:8766/']) {
+test('native workbench has stage navigation on both DSH renderer contracts without loading upstream', async () => {
+  const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
+  for (const origin of ['http://127.0.0.1:51886/', 'dsh-app://app/']) {
     const mounted = await mount();
     mounted.sandbox.window.location = new URL(origin);
+    const studio = mounted.face.studio;
     const render = () => mounted.runtime.render(mounted.main.component, mounted.face);
-    const activate = byRole(render(), 'tab').find(node => textOf(node).includes('Local Charakuru Kit'));
-    activate.props.onClick();
-    let nodes = hostNodes(render());
-    assert.equal(nodes.some(node => node.type === 'iframe'), false);
-    const load = nodes.find(node => node.type === 'button' && textOf(node).includes('Load the local Kit'));
-    const shouldLoad = origin.includes('51886') || origin.startsWith('dsh-app:');
-    assert.equal(Boolean(load), shouldLoad);
-    if (load) {
-      load.props.onClick();
-      nodes = hostNodes(render());
-      const iframe = nodes.find(node => node.type === 'iframe');
-      assert.equal(iframe.props.src, 'http://127.0.0.1:8766/');
-      assert.equal(iframe.props.referrerPolicy, 'no-referrer');
-      assert.match(iframe.props.sandbox, /allow-scripts/);
-      assert.doesNotMatch(iframe.props.sandbox, /allow-top-navigation|allow-popups/);
-      nodes.find(node => node.type === 'button' && textOf(node).includes('Unload the Kit')).props.onClick();
-      assert.equal(hostNodes(render()).some(node => node.type === 'iframe'), false);
-    }
+    const stages = Object.fromEntries(PIPELINE_STAGES.map(s=>[s.id,{status:s.id==='2_views'?'in_progress':'pending'}]));
+    studio.set({loaded:true,boot:{stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,projectExists:true,activeProjectDir:'fixture',
+      projectState:{activeStageId:'2_views',projectName:'Native',stages,views:{},assets:{items:[],selected:{}}},projectSummary:{completedStages:1,readyViews:0,remainingFreeCredits:0,percent:16}}});
+    const tree = render();
+    assert.equal(byRole(tree,'tab').length,7);
+    assert.equal(hostNodes(tree).some(node=>node.type==='iframe'),false);
+    assert.equal(hostNodes(tree).filter(node=>node.type==='li'&&node.props.className==='ck-stage').length,6);
+    const here=hostNodes(tree).find(node=>node.props['aria-current']==='step');
+    assert.match(textOf(here), /Part views/);
+    hostNodes(here).find(node=>node.type==='button').props.onClick();
+    assert.equal(studio.getSnapshot().tab,'models');
+    assert.equal(studio.getSnapshot().boot.projectState.activeStageId,'2_views');
+    assert.equal(hostNodes(render()).some(node=>node.type==='iframe'),false);
+    const gallery=byRole(render(),'tab').find(node=>textOf(node).includes('Asset library'));
+    gallery.props.onClick();
+    const tiles=hostNodes(render()).filter(node=>node.type==='button' && textOf(node)==='Prepare this view');
+    assert.equal(tiles.length,5,'two selected-angle part views and three balance references');
+    tiles[1].props.onClick();
+    assert.equal(studio.getSnapshot().tab,'models');
+    assert.equal(studio.getSnapshot().form.imageScope,'body_front');
     mounted.harness.dispose();
   }
 });
