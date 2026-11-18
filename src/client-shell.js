@@ -431,13 +431,12 @@ window.__ModuleLoader__.load({
       return {
         base: base,
         materialStage: '', materialRole: '', materialSlot: 'head_front', materialPart: 'head', materialPath: '', materialPreview: '', materialMotionId: '', editorMaterialId: '', materialTarget: '', materialTextureSlot: '0',
-        deskInitialMode:'illustration',deskStage:'',deskBaseStep:'base',deskAngle:'front',deskImageGuides:true,deskPart:'head',deskCandidate:'',
-        deskBody:'',deskRig:'',deskKeep:'',deskAssemblyScale:'1',deskAssemblyX:'0',deskAssemblyY:'0',deskAssemblyZ:'0',deskScaleX:'1',deskScaleY:'1',deskScaleZ:'1',deskShape:'',deskShapeValue:'0',deskDonor:'',deskReplace:'',deskBone:'',deskHeadScale:'1',deskHeadX:'0',deskHeadY:'0',deskHeadZ:'0',
-        deskKit:['clothing','hair','accessory'],deskBudget:'0',deskQuote:'',
-        deskRenderId:'',deskRenderCompare:'',deskRenderBrief:'',deskRenderNote:'',deskPreset:'wine_stage',deskRenderCamera:'three_quarter',deskFraming:'full',deskSize:'draft',deskToon:'preset',deskExposure:'0',deskKey:'1',deskFill:'0.8',deskRim:'1',
-        imageRequestId: '', accountAlias: '', accountLimit: '0', accountChannel: 'tripo_studio', sourceBlend: '', editorOperation: 'audit', editorParams: '{}', vrmAddonPath: '', aiPrompt: '', editorCamera: 'front', overlayId: '', overlayOpacity: '0.35', selectedObject: '', playMotion: false, assetKind: 'image', slotId: 'source', sourcePath: '', previewId: '', projectDir: activeProject, prompt: '', source: '', allowance: '200',
+        deskAiBriefs:{},deskInitialMode:'illustration',deskStage:'',deskBaseStep:'base',deskAngle:'front',deskImageGuides:true,deskPart:'head',deskCandidate:'',
+        studioObjectPart:'clothing',studioRefId:'',studioCap:'',studioQuote:'',studioDownload:'',studioPartPreview:'',deskReviewOriginal:false,
+        deskRenderId:'',deskRenderCompare:'',deskRenderBrief:'',deskRenderNote:'',
+        imageRequestId: '', accountAlias: '', accountLimit: '0', accountChannel: 'tripo_studio', sourceBlend: '', vrmAddonPath: '', editorCamera: 'front', overlayId: '', overlayOpacity: '0.35', selectedObject: '', playMotion: false, assetKind: 'image', slotId: 'source', sourcePath: '', previewId: '', projectDir: activeProject, prompt: '', source: '', allowance: '200',
         model: config.defaultImageModel || 'qwen-image-2.1-local',
-        apiModel: '', variant: 'base', artist: '', unet: '', imageScope: 'head_front', referenceMode: 'project', compareAngle: 'front',
+        imageScope:'head_front',imageMode:'image_to_image',imagePanel:'tips',compareAngle:'front',
         strategy: 'studio_free_saver', estimate: '', part: 'head',
         glb: '', task: '', spent: '0', notes: '',
         operation: 'stage1_safe_import', blend: '', headGlb: '', bodyGlb: '',
@@ -455,7 +454,7 @@ window.__ModuleLoader__.load({
       var t = ctx.locale.bind(NS);
       var state = {
         form: createForm(config), boot: null, loaded: false, pending: false, busy: false,
-        tab: 'pipeline', imagePreflight: null, result: null, error: '', notice: ''
+        tab: 'pipeline', lastDraft:null, imagePreflight: null, result: null, error: '', notice: ''
       };
       var listeners = new Set();
       var controllers = new Set();
@@ -480,7 +479,10 @@ window.__ModuleLoader__.load({
         if(key==='projectDir')try{localStorage.setItem('avatar-studio-active-project',value);}catch(_){}
         if(key==='imageRequestId')try{localStorage.setItem('avatar-studio-request:'+state.form.projectDir,value);}catch(_){}
         var patch={form:Object.assign({},state.form,{[key]:value})};
-        if(key==='base' && value!==state.form.base) Object.assign(patch,{boot:null,loaded:false,notice:'',error:'',result:null});
+        if(key==='base' && value!==state.form.base) Object.assign(patch,{boot:null,loaded:false,notice:'',error:'',result:null,lastDraft:null});
+        if(key==='projectDir'&&value!==state.form.projectDir){patch.lastDraft=null;patch.form.studioRefId='';patch.form.studioPartPreview='';patch.form.selectedObject='';patch.form.deskAiBriefs={};patch.form.deskReviewOriginal=false;
+          patch.form.imageRequestId='';try{patch.form.imageRequestId=localStorage.getItem('avatar-studio-request:'+value)||'';}catch(_){}
+        }
         set(patch);
       }
 
@@ -496,7 +498,7 @@ window.__ModuleLoader__.load({
         if (typeof fetch !== 'function') throw new Error('fetch is unavailable in this host');
         var controller = new AbortController();
         controllers.add(controller);
-        var slow = file || route.indexOf('/materials/') >= 0 || route.indexOf('/render/run') >= 0 || route.indexOf('/render/collect') >= 0 || route.indexOf('/editor/run') >= 0 || route.indexOf('/editor/collect') >= 0 || route.indexOf('generate') >= 0 || route.indexOf('/blender/stage') >= 0;
+        var slow = file || route.indexOf('/materials/') >= 0 || route.indexOf('/tripo/studio/collect')>=0 || route.indexOf('/render/collect') >= 0 || route.indexOf('/editor/run') >= 0 || route.indexOf('/editor/collect') >= 0 || route.indexOf('generate') >= 0 || route.indexOf('/blender/stage') >= 0;
         var timer = setTimeout(function () { controller.abort(); }, slow ? TIMEOUT_SLOW : TIMEOUT_FAST);
         try {
           var res = await fetch(loopback(state.form.base) + route, {
@@ -583,6 +585,7 @@ window.__ModuleLoader__.load({
           var payload = Object.assign({ projectDir: state.form.projectDir }, body);
           var data = await request(route, payload);
           if (route === '/studio/assets/import' && data.asset && data.asset.slotId === 'source') syncOriginal(data);
+          if (route === '/studio/assets/clear-image') {if(body.slotId==='source')syncOriginal(data);if(body.slotId==='overlay')put('overlayId','');}
           if (route === '/studio/assets/select' && body.assetId && data.state && data.state.assets && data.state.assets.selected.source === body.assetId) syncOriginal(data);
           if (refreshAfter) await refresh(false);
           return data;
@@ -596,7 +599,7 @@ window.__ModuleLoader__.load({
           var outcome = data.instruction ? insertInstructions(data.instruction) : 'unsupported';
           return Object.assign({}, data, { draftOutcome: outcome });
         }).then(function (data) {
-          if (data) set({ notice: t(data.draftOutcome === 'ok' ? 'inserted' : 'aiRecorded') });
+          if (data) set({notice:t(data.draftOutcome==='ok'?'inserted':'aiRecorded'),lastDraft:data.instruction?{instruction:data.instruction,draftOutcome:data.draftOutcome,id:data.request?.id||data.ticket?.id}:null});
           return data;
         });
       }
@@ -793,20 +796,11 @@ function GeometryPreview(props) {
         var projectState = boot && boot.projectExists
           && (!form.projectDir || form.projectDir === boot.activeProjectDir) ? boot.projectState : null;
         var activeStage = projectState && projectState.stages && projectState.stages[projectState.activeStageId];
-        var models = (boot && boot.aaCatalog && boot.aaCatalog.models) || [];
-        var selectedModel;
-        for (var index = 0; index < models.length; index += 1) {
-          if (models[index].id === form.model) selectedModel = models[index];
-        }
-
         function stageName(id) {
-          for (var i = 0; i < stages.length; i += 1) if (stages[i].id === id) return stages[i]['title' + lang] || id;
-          return id;
+          var entry=stages.find(function(s){return s.id===id;});return entry?.['title'+lang]||id;
         }
-
-        function fieldId(key) { return uid + '-f-' + key; }
-
-        function field(key, name, type) {
+        function fieldId(key){return uid+'-f-'+key;}
+        function field(key,name,type) {
           var id = fieldId(key);
           return h('label', { className: 'ck-field', key: key, htmlFor: id },
             h('span', null, t(name || key)),
@@ -895,70 +889,13 @@ function GeometryPreview(props) {
           studio.put('materialStage',stageId || '');studio.put('materialRole','');selectTab('materials');
         }
         var viewDefs = (boot && boot.requiredViewSlots) || [];
-        var chosenSlots = form.imageScope === 'all' ? undefined : ['head', 'body', 'balance'].includes(form.imageScope)
-          ? viewDefs.filter(function(v) { return v.group === form.imageScope; }).map(function(v) { return v.id; }) : [form.imageScope];
-        function viewPayload() {
-          return { modelId: form.model, apiModelOverride: form.apiModel, characterPrompt: form.prompt, artistTag: form.artist,
-            animaVariant: form.variant, modelFiles: form.unet ? {unet: form.unet} : {}, slots: chosenSlots, referenceMode: form.referenceMode };
-        }
-        var preflightKey = JSON.stringify([boot && boot.activeProjectDir, projectState && projectState.stateRevision, viewPayload()]);
-        var prepared = state.imagePreflight && state.imagePreflight.key === preflightKey ? state.imagePreflight.result : null;
-        var imageResult = state.result;
-        var cloudModel = selectedModel && selectedModel.deployment === 'cloud' && selectedModel.driver !== 'catalog';
-        var catalogOnly = selectedModel && selectedModel.driver === 'catalog';
-        var hasOriginal = Boolean(projectState && projectState.characterSpec && projectState.characterSpec.sourceImages && projectState.characterSpec.sourceImages.length);
-        var modelsTab = [
-          h('p', { className: 'ck-muted', key:'snapshot' }, t('snapshot')),
-          select('model', 'model', models.map(function (model) { return [model.id, model.name]; })),
-          selectedModel ? card(selectedModel.name, h(React.Fragment, null,
-            h('div',{className:'ck-model-stats'},h('span',{className:'ck-pill','data-status':catalogOnly?'pending':'in_progress'},selectedModel['adapter' + lang] || selectedModel.deployment),
-              h('span',{className:'ck-chip'},t(selectedModel.weights || 'unknown')), h('span',{className:'ck-chip'},'T2I ' + (selectedModel.aaT2iRank ? '#' + selectedModel.aaT2iRank + ' · ' : '') + (selectedModel.aaT2iElo || '—')),
-              h('span',{className:'ck-chip'},'Edit ' + (selectedModel.aaEditRank ? '#' + selectedModel.aaEditRank + ' · ' : '') + (selectedModel.aaEditElo || '—'))),
-            h('p', null, selectedModel['endpoint' + lang] || ''),
-            h('p', { className: 'ck-muted' }, (selectedModel['stage'+lang] ? t('suggestedStage') + ' · ' + selectedModel['stage'+lang] : '')),
-            h('p', { className: 'ck-muted' }, selectedModel.licenseNotice || ''),
-            h('ul', { className:'ck-tips' }, (selectedModel['promptTips' + lang] || []).map(function (tip, i) { return h('li', { key: i }, tip); })),
-            selectedModel.apiIdExample ? h('p', {className:'ck-muted'},t('idExample') + ' ',h('code',null,selectedModel.apiIdExample),' · ' + (selectedModel.apiIdEvidence === 'Official documentation' ? t('officialDoc') : t('experimentalDoc'))) : null,
-            selectedModel.sourceUrl ? h('a',{href:selectedModel.sourceUrl,target:'_blank',rel:'noopener noreferrer'},t('modelDocs')) : null)) : null,
-          card('imageSettings',h(React.Fragment,null,
-            field('prompt','prompt','textarea'),
-            h('div', {className:'ck-grid'},
-              select('imageScope','imageScope',[['all',t('allViews')],['head',t('head')],['body',t('body')],['balance',t('balance')]].concat(viewDefs.map(function(v){ return [v.id, v['label'+lang] || v.id]; }))),
-              select('referenceMode','referenceMode',[['project',t('projectRef')],['text_only',t('textOnly')]]),
-              cloudModel ? field('apiModel', 'apiModel') : null,
-              selectedModel && selectedModel.driver === 'comfyui_anima' ? select('variant', 'variant', ['base', 'aesthetic', 'turbo'].map(function (value) { return [value, value]; })) : null,
-              selectedModel && selectedModel.driver === 'comfyui_anima' ? field('unet', 'unet') : null,
-              selectedModel && selectedModel.driver === 'comfyui_anima' ? field('artist', 'artist') : null),
-            h('p',{className:'ck-muted'},form.referenceMode === 'text_only' ? t('textOnlyHelp') : hasOriginal ? t('referenceIsSet') : t('referenceEmpty')),
-            h('p', { className:'ck-muted' }, cloudModel && boot && boot.imageSetup && !boot.imageSetup.cloudEnabled ? t('cloudOff') : t('cloudHint')),
-            h('div',{className:'ck-row'},
-              button('preflight', function () {
-                studio.act(async function(){var result = await studio.request('/studio/views/preflight', Object.assign({projectDir:form.projectDir,mode:'execute'}, viewPayload()));
-                  studio.set({imagePreflight:{key:preflightKey,result:result}}); return result;});
-              }, !projectState),
-              button('compile', function () { studio.action('/studio/prompts/compile', Object.assign(viewPayload(),{useProjectReference: hasOriginal && form.referenceMode === 'project'})); }),
-              button('export', function () { studio.action('/studio/views/generate', Object.assign(viewPayload(),{mode:'plan_and_export_workflows'})); },!projectState),
-              button('execute', function () {
-                if (cloudModel && !window.confirm(selectedModel.name + ' / ' + form.apiModel.trim() + ' · ' + chosenSlots[0] + '\n\n' + t(hasOriginal && form.referenceMode === 'project' ? 'cloudConfirmRef' : 'cloudConfirmText'))) return;
-                var requestId = form.imageRequestId || crypto.randomUUID();
-                if (!form.imageRequestId) studio.put('imageRequestId',requestId);
-                studio.action('/studio/views/generate',Object.assign(viewPayload(),{ mode:'execute', requestId:requestId, expectedRevision:projectState.stateRevision, cloudConfirmed:!!cloudModel }),true);
-              },!projectState || !selectedModel || catalogOnly || prepared && !prepared.allowed || cloudModel && (!chosenSlots || chosenSlots.length !== 1 || !form.apiModel.trim() || boot && boot.imageSetup && !boot.imageSetup.cloudEnabled),'primary')),
-            prepared ? h('div',{className:'ck-callout',role:'status','data-ready':prepared.allowed},prepared.allowed ? t('preflightReady') : h('ul',null,(prepared.reasons || []).map(function(r,i){return h('li',{key:i},r);}))) : null,
-            !catalogOnly && form.imageRequestId ? h('div',{className:'ck-row'},h('span',{className:'ck-muted'},t('imageRequest') + ' ',h('code',null,form.imageRequestId)),
-              button('resetImageRequest',function(){if(window.confirm(t('resetImageConfirm')))studio.put('imageRequestId','');})) : null)),
-          imageResult && imageResult.mode === 'plan_and_export_workflows' ? card('exportedPlan',h(React.Fragment,null,
-            imageResult.referencePlan==='reference_requested_not_bound'?h('p',{className:'ck-callout'},t('unboundReference')):null,
-            h('ul',{className:'ck-paths'},(imageResult.exportedArtifacts || []).map(function(p){return h('li',{key:p},h('code',null,p));})))) : null,
-          imageResult && imageResult.mode === 'execute' ? card('imageReceipt',h(React.Fragment,null,
-            h('ul',{className:'ck-paths'},(imageResult.results || []).map(function(r){return h('li',{key:r.slotId},r.slotId + ' · ' + (r.ok ? t(r.selected?'imageSelected':'imageCandidate') : r.error)+(r.providerPromptId ? ' · ComfyUI '+r.providerPromptId : ''));})),
-            button('assets',function(){selectTab('assets');}))) : null,
-          imageResult && imageResult.pack ? card('compiledPrompts',h('div',{className:'ck-view-grid'},imageResult.pack.views.map(function(v){return h('div',{className:'ck-view-card',key:v.slotId},h('strong',null,v[lang==='Zh'?'labelZh':'slotId']),h('p',null,v.resolution),h('p',null,v.positivePrompt),v.negativePrompt?h('p',{className:'ck-muted'},'− '+v.negativePrompt):null);}))) : null,
-        ];
+        var modelsTab=h(DeskImageWorkspace,{studio:studio,state:state,projectState:projectState,lang:lang,selectTab:selectTab});
+        function registerRole(stage,role) { openIntake(stage);studio.put('materialRole',role); }
 
         var tripoResult = projectState && state.result && state.result.estimateOnly && state.result.projectDir === boot.activeProjectDir ? state.result : null;
         var tripoPlan = tripoResult && tripoResult.studioWebPlaybook;
         var tripoTab = [
+          h(DeskTripoStudio,{key:'browser',studio:studio,state:state,projectState:projectState,lang:lang,register:registerRole}),
           card('跨工程账户账本（手工核对，非供应商余额）',h(React.Fragment,null,
             h('p',{className:'ck-muted'},'Studio 与 API 使用不同账号别名。账本不能阻止你在外部网页消费；网络超时不自动视为零扣费。'),
             h('div',{className:'ck-grid'},field('accountAlias','账户别名（不要填密钥）'),field('accountLimit','本月已核对可用预算','number'),select('accountChannel','计费渠道',[['tripo_studio','Tripo Studio'],['tripo_api','Tripo API'],['image_api','图像 API']])),
@@ -1004,18 +941,14 @@ function GeometryPreview(props) {
             select('target', 'target', [['headless', 'Headless'], ['gui_act', 'GUI']])),
           field('blend', 'blend'),
           h('div', { className: 'ck-grid' }, field('headGlb', 'headGlb'), field('bodyGlb', 'bodyGlb')),
-          h('div', { className: 'ck-row' }, ['scripts', 'run'].map(function (key) {
-            return button(key, function () {
-              studio.action('/studio/blender/stage', {
-                operation: form.operation, executeViaPlugin: key === 'run', executionTarget: form.target,
-                params: {
-                  inputBlendPath: form.blend || undefined,
-                  headGlbPath: form.headGlb || undefined,
-                  bodyGlbPath: form.bodyGlb || undefined
-                }
-              }, true);
-            }, !projectState);
-          }))
+          h('div',{className:'ck-row'},button('scripts',function(){studio.action('/studio/blender/stage',{operation:form.operation,executeViaPlugin:false,executionTarget:form.target,
+            params:{inputBlendPath:form.blend||undefined,headGlbPath:form.headGlb||undefined,bodyGlbPath:form.bodyGlb||undefined}});},!projectState),
+            button(lang==='Zh'?'交给 DSH 运行此工序':'Draft this stage for DSH',function(){
+              var brief=(lang==='Zh'?'请用已审批、已核验的本机输入执行此 Blender 工序。确认可用参数和文件后用工具运行；不要修改源文件、上传或自行审批。':'Use reviewed, fingerprinted local inputs for this Blender stage. Check the inputs before running. Do not overwrite sources, upload or approve results.')+'\n'+
+                'charakuru_blender_avatar '+JSON.stringify({action:'run_stage',projectDir:boot.activeProjectDir,operation:form.operation,executeViaPlugin:true,executionTarget:form.target});
+              if(studio.insertInstructions(brief)!=='ok')studio.set({lastDraft:{id:'blender-stage',instruction:brief,draftOutcome:'unsupported'},notice:t('noSession')});
+            },!projectState,'primary')),
+          state.lastDraft?.id==='blender-stage'?h(DeskHandoffCopy,{studio:studio,result:state.lastDraft,lang:lang,disabled:busy}):null
         ];
 
         var credentialsTab = [
@@ -1057,6 +990,7 @@ function GeometryPreview(props) {
             asset ? h('button',{type:'button',className:'ck-btn',onClick:function(){studio.put('previewId',asset.id);}},
               h('img',{src:assetUrl(asset),alt:asset.label,loading:'lazy',referrerPolicy:'no-referrer'})) : h('p',{className:'ck-muted'},t('missingView')),
             asset && current.status!=='ready' ? h('p',{className:'ck-muted'},lang==='Zh'?'原画或设定变化，请重新选择或补图。':'Reference or brief changed; reselect or make a replacement.') : null,
+            h(DeskImageChoice,{studio:studio,project:projectState,lang:lang,slot:slot.id,busy:busy}),
             button('redoView',function(){studio.put('imageScope',slot.id);selectTab('models');}));
         }
         var assetTab = [
@@ -1077,7 +1011,7 @@ function GeometryPreview(props) {
             return h('section',{className:'ck-card',key:asset.id},h('strong',null,(asset.slotId==='source'?t('sourceSlot'):asset.slotId||asset.part)+' · '+(selected?'已采用':'候选')),
               asset.kind==='image'?h('button',{type:'button',className:'ck-btn',onClick:function(){studio.put('previewId',asset.id);}},h('img',{src:assetUrl(asset),alt:asset.label,loading:'lazy',referrerPolicy:'no-referrer',style:{width:'100%',height:180,objectFit:'contain',background:'#18212c',borderRadius:6}})):h('button',{className:'ck-btn',onClick:function(){studio.put('previewId',asset.id);}},'预览 GLB 几何'),
               h('p',{className:'ck-muted'},asset.label+' · '+Math.round(asset.bytes/1024)+' KiB · '+asset.sha256.slice(0,12)),
-              asset.slotId === 'overlay' ? button('materialOverlay', function(){studio.put('overlayId',asset.id);selectTab('editor');}) : button('selectAsset',function(){studio.action('/studio/assets/select',{assetId:asset.id,expectedRevision:projectState.stateRevision},true);},selected||asset.kind==='glb'&&!asset.renderable));
+              asset.kind==='image'&&selected ? deskButton(lang==='Zh'?'取消采用':'Clear selection',function(){studio.action('/studio/assets/clear-image',{slotId:asset.slotId,expectedAssetId:asset.id,expectedRevision:projectState.stateRevision},true);},busy) : asset.slotId === 'overlay' ? button('materialOverlay', function(){studio.put('overlayId',asset.id);selectTab('editor');}) : button('selectAsset',function(){studio.action('/studio/assets/select',{assetId:asset.id,expectedRevision:projectState.stateRevision},true);},selected||asset.kind==='glb'&&!asset.renderable));
           }))
         ];
         var editorState=projectState&&projectState.editor;
@@ -1090,7 +1024,12 @@ function GeometryPreview(props) {
         var textureTarget=form.materialTarget || form.selectedObject;
         var overlayAsset=assetItems.find(function(a){return a.id===form.overlayId;});
         function editorUrl(kind){return loopback(form.base)+'/studio/editor/content?projectDir='+encodeURIComponent(form.projectDir||boot.activeProjectDir)+'&revisionId='+editRevision.id+'&kind='+kind+'&access='+encodeURIComponent(boot.sessionToken||'');}
-        function editorRun(operation){studio.act(async function(){var params=operation==='import_checkpoint'?{}:JSON.parse(form.editorParams||'{}');if(operation==='import_blend')params.sourceBlend=form.sourceBlend;if(form.vrmAddonPath)params.vrmAddonPath=form.vrmAddonPath;if(form.selectedObject&&!params.objects&&operation==='transform')params.objects=[form.selectedObject];var result=await studio.request('/studio/editor/run',{projectDir:form.projectDir,operation:operation,params:params,expectedRevisionId:editorState&&editorState.activeRevisionId||null});await studio.refresh(false);return result;});}
+        function editorRun(operation){
+          if(operation==='import_blend'&&!window.confirm(t('materialTrustBlend')))return;
+          var params=operation==='import_blend'?{sourceBlend:form.sourceBlend}:{};
+          if(form.vrmAddonPath)params.vrmAddonPath=form.vrmAddonPath;
+          studio.action('/studio/editor/run',{operation:operation,params:params,expectedRevisionId:editorState?.activeRevisionId||null},true);
+        }
         function applyRegisteredMaterial() {
           if (!editMaterial) return;
           if (editMaterial.intent==='scene' && !window.confirm(t('materialTrustBlend'))) return;
@@ -1099,21 +1038,6 @@ function GeometryPreview(props) {
           if (form.vrmAddonPath) params.vrmAddonPath=form.vrmAddonPath;
           studio.action('/studio/editor/run',{operation:MATERIAL_EDITOR_OPS[editMaterial.intent],params:params,expectedRevisionId:editRevision?.id || null},true);
         }
-        var requestStatus = {requested:'aiRequested',ready_for_review:'aiReady',approved:'aiApproved',rejected:'aiRejected'};
-        var aiHistory = ((editorState && editorState.requests) || []).slice(-8).reverse().map(function(item) {
-          var canReview = !!editRevision && item.status==='ready_for_review' && item.resultRevisionId===editRevision.id;
-          function review(decision) {
-            studio.action('/studio/editor/ai-review',{requestId:item.id,revisionId:editRevision.id,decision:decision},true);
-          }
-          return h('section',{className:'ck-card',key:item.id},
-            h('strong',null,t(requestStatus[item.status] || 'aiRequested')+' · '+item.id.slice(0,8)),
-            h('p',{className:'ck-muted'},item.prompt),
-            item.status==='requested' && editRevision && item.baseRevisionId===editRevision.id
-              ? button('aiDraft',function(){studio.handoffAiEdit('/studio/editor/ai-handoff',{requestId:item.id},false);},!!editorState.pendingJob) : null,
-            canReview ? h('div',{className:'ck-row'},
-              button('aiAccept',function(){review('approve');},!!editorState.pendingJob),
-              button('aiReject',function(){review('reject');},!!editorState.pendingJob)) : null);
-        });
         var editorTab=[
           h('div',{className:'ck-row',key:'prep'},button('prepBlender',function(){selectTab('blender');})),
           h('p',{className:'ck-muted'},'可读取已有 Blend，也可接力本工程通过伴随插件生成的 Blender 检查点。源文件只读，所有工序另存不可变版本；结构检查不代替视觉审批。'),
@@ -1128,18 +1052,14 @@ function GeometryPreview(props) {
           h('div',{className:'ck-row'},button('editorImport',function(){editorRun('import_blend');},!form.sourceBlend||!form.projectDir||!!(editorState&&editorState.pendingJob)),button('checkpointImport',function(){editorRun('import_checkpoint');},!blenderCheckpoint||!!(editorState&&editorState.pendingJob)),button('collectEditor',function(){studio.action('/studio/editor/collect',{},true);},!editorState||!editorState.pendingJob),button('取消编辑作业',function(){studio.action('/studio/editor/cancel',{},true);},!editorState||!editorState.pendingJob)),
           editRevision?h(React.Fragment,null,
             h('div',{className:'ck-grid'},select('editorCamera','camera',[['front','+Z / 正面'],['back','−Z / 背面'],['left','−X / 左面'],['right','+X / 右面'],['perspective','透视']]),select('overlayId','overlay',[['','不叠加']].concat(assetItems.filter(function(a){return a.kind==='image';}).map(function(a){return [a.id,a.label||a.slotId];}))),field('overlayOpacity','overlayOpacity','number')),
-            h('div',{className:'ck-row'},button('saveView',function(){studio.action('/studio/editor/view',{camera:form.editorCamera,overlayAssetId:form.overlayId||null,overlayOpacity:Number(form.overlayOpacity)},true);}),h('label',null,h('input',{type:'checkbox',checked:!!form.playMotion,onChange:function(e){studio.put('playMotion',e.target.checked);}}),'VRM 步行动作探针')),
+            h('div',{className:'ck-row'},button('saveView',function(){studio.action('/studio/editor/view',{camera:form.editorCamera,overlayAssetId:form.overlayId||null,overlayOpacity:Number(form.overlayOpacity),expectedRevision:projectState.stateRevision},true);}),h('label',null,h('input',{type:'checkbox',checked:!!form.playMotion,onChange:function(e){studio.put('playMotion',e.target.checked);}}),'VRM 步行动作探针')),
             projectMaterials.some(function(m){return m.intent==='motion';}) ? select('materialMotionId','materialMotion',[['',t('materialNoMotion')]].concat(projectMaterials.filter(function(m){return m.intent==='motion';}).map(function(m){return [m.id,m.fileName+' · '+stageName(m.stageId)+' · '+m.sha256.slice(0,8)];}))) : null,
             previewMotion && !editRevision.artifacts.vrm ? h('p',{className:'ck-callout'},t('materialMotionNeedsVrm')) : null,
             h(GeometryPreview,{key:editRevision.id,lang:lang,url:editorUrl(editRevision.artifacts.vrm?'vrm':'preview'),camera:form.editorCamera,overlayUrl:overlayAsset?assetUrl(overlayAsset):null,opacity:Number(form.overlayOpacity),playMotion:form.playMotion,motionUrl:previewMotion && editRevision.artifacts.vrm ? studioMaterialUrl(form,boot,previewMotion) : null,onSelect:function(name){studio.put('selectedObject',name);}}),
             h('p',{className:'ck-muted'},'当前版本 '+editRevision.id.slice(0,8)+' · 已选对象 '+(form.selectedObject||'无')+' · '+editRevision.operation),
-            select('editorOperation','editorOperation',['audit','head_scale','transform','materials','transfer_weights','normalize_weights','configure_vrm','spring_setup','pose_check','export_vrm'].map(function(op){return [op,op];})),field('editorParams','editorParams','textarea'),
-            h('div',{className:'ck-row'},button('editorRun',function(){editorRun(form.editorOperation);},!!editorState.pendingJob),button('editorUndo',function(){studio.action('/studio/editor/rollback',{revisionId:editRevision.parentId,expectedRevisionId:editRevision.id},true);},!editRevision.parentId||!!editorState.pendingJob)),
-            field('aiPrompt','aiPrompt','textarea'),
-            button('aiDraft',function(){studio.handoffAiEdit('/studio/editor/ai-request',{prompt:form.aiPrompt,
-              objects:form.selectedObject?[form.selectedObject]:[],camera:form.editorCamera,expectedRevisionId:editRevision.id},true);},
-              !form.aiPrompt.trim()||!!editorState.pendingJob),
-            h('p',{className:'ck-muted'},t('aiReviewHint')), aiHistory,
+            h(DeskAiJob,{studio:studio,state:state,projectState:projectState,revision:editRevision,lang:lang,intent:'general',showAll:true,
+              objects:form.selectedObject&&(editRevision.audit?.objects||[]).some(function(o){return o.name===form.selectedObject;})?[form.selectedObject]:[]}),
+            button('editorUndo',function(){studio.action('/studio/editor/rollback',{revisionId:editRevision.parentId,expectedRevisionId:editRevision.id},true);},!editRevision.parentId||!!editorState.pendingJob),
             details('result',false,h('pre',{className:'ck-pre'},JSON.stringify({gates:editRevision.audit.gates,notes:editRevision.audit.notes,revisions:editorState.revisions.map(function(r){return {id:r.id,operation:r.operation,parentId:r.parentId};})},null,2)))
           ):null
         ];

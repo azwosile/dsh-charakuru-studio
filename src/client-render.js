@@ -7,14 +7,11 @@ function RenderWorkspace(props) {
   var comparison=requests.find(function(r){return r.id===form.deskRenderCompare&&r.id!==selected?.id&&r.revisionId===selected?.revisionId&&r.artifacts?.png;});
   var labels={requested:L('待接力','Awaiting handoff'),rendering:L('执行中 / 待回执','Rendering / awaiting receipt'),queued:L('伴随队列','Companion queue'),ready_for_review:L('待人工审阅','Ready for review'),approved:L('已批准图像','Image approved'),rejected:L('图像已退回','Image rejected'),failed:L('未确认完成','Not confirmed')};
   function field(k,label,opts){return deskField(label,form[k],function(v){studio.put(k,v);},Object.assign({disabled:busy},opts));}
-  function select(k,label,opts){return deskSelect(label,form[k],opts,function(v){studio.put(k,v);},busy);}
-  var recipe={preset:form.deskPreset,camera:form.deskRenderCamera,framing:form.deskFraming,size:form.deskSize,
-    exposure:Number(form.deskExposure),key:Number(form.deskKey),fill:Number(form.deskFill),rim:Number(form.deskRim),toon:form.deskToon==='preset'?undefined:form.deskToon==='on'};
-  var canCreate=!!active&&!editor?.pendingJob&&form.deskRenderBrief.trim()&&!busy&&Object.hasOwn(presets,recipe.preset);
+  var canCreate=!!active&&!editor?.pendingJob&&form.deskRenderBrief.trim()&&!busy;
   var gateway=boot?.blenderBridge?.protocol==='gateway-3.1';
   var stale=!!selected&&selected.revisionId!==active?.id;
   function create(useAi){
-    var body={projectDir:boot.activeProjectDir,brief:form.deskRenderBrief,recipe:recipe,expectedRevisionId:active.id};
+    var body={projectDir:boot.activeProjectDir,brief:form.deskRenderBrief,expectedRevisionId:active.id};
     var action=useAi?studio.handoffAiEdit('/studio/render/request',body,true):studio.action('/studio/render/request',body,true);
     action.then(function(result){if(result?.request)studio.put('deskRenderId',result.request.id);});
   }
@@ -41,17 +38,12 @@ function RenderWorkspace(props) {
     h('p',null,L('从活动 Blender 修订布光、取景、渲染。模型、VRM 和制作审批均不改变。','Light, frame and render the active Blender revision. No model, VRM or project review is changed.'))),
     deskButton(L('返回制作工作台','Back to workbench'),function(){props.selectTab('pipeline');},false));
   if(!project) return h('div',{className:'ck-workbench'},header,h('p',{className:'ck-callout'},L('先打开或新建角色工程。','Open or create a character project first.')));
-  var controls=deskCard(L('镜头与交接','Shot & handoff'),h(React.Fragment,null,
+  var controls=deskCard(L('写下目标，交给 AI 调整','Describe the shot; AI adjusts it'),h(React.Fragment,null,
     h('p',{className:'ck-desk-meta'},active?L('活动修订 ','Active revision ')+active.id.slice(0,8)+' · '+active.artifacts.blend.sha256.slice(0,12):L('需先建立 Blender 修订','A Blender revision is required')),
     editor?.pendingJob?h('p',{className:'ck-callout'},L('请先收集编辑作业。','Collect the editor job first.')):null,
     field('deskRenderBrief',L('给 AI 的渲染要求','Render brief for AI'),{multiline:true,maxLength:4000,placeholder:L('例：酒红舞台，冷边缘光，面部不过曝，取半身。','Example: wine stage, cool rim, mid shot, protect face highlights.')}),
-    select('deskPreset',L('色调方案','Lighting palette'),Object.entries(presets).map(function(e){return [e[0],e[1][lang==='En'?'en':'zh']];})),
-    h('div',{className:'ck-grid'},select('deskRenderCamera',L('镜头方向','Camera angle'),[['front',L('正面','Front')],['three_quarter',L('斜前 3/4','Three quarter')],['profile',L('右侧','Profile')],['back',L('背面','Back')]]),
-      select('deskFraming',L('构图','Framing'),[['full',L('全身','Full body')],['portrait',L('头像与肩部','Head and shoulders')]]),
-      select('deskSize',L('分辨率','Size'),[['draft','640 × 800'],['review','960 × 1200'],['wide','1280 × 720']]),
-      select('deskToon',L('材质方案','Material treatment'),[['preset',L('随方案','Preset default')],['on',L('可兼容材质做 Toon','Toon on compatible materials')],['off',L('保留原着色器','Preserve shaders')]])),
-    h('details',{className:'ck-inline-details'},h('summary',null,L('主光、补光、轮廓光与曝光','Key, fill, rim & exposure')),
-      h('div',{className:'ck-grid'},[['deskKey',L('主光','Key'),.35,1.8],['deskFill',L('补光','Fill'),.15,1.6],['deskRim',L('轮廓光','Rim'),0,1.8],['deskExposure',L('曝光 EV','Exposure EV'),-1.5,1.5]].map(function(x){return h('div',{key:x[0]},field(x[0],x[1],{type:'number',min:x[2],max:x[3],step:.05}));}))),
+    h('details',{className:'ck-inline-details'},h('summary',null,L('学习参考（不作为渲染预设）','Lighting studies (not applied)')),
+      h('p',{className:'ck-muted'},L('酒红舞台可以参考高反差剪影与冷边光；冷调室内可参考柔主光和低位补光；中性图便于检查建模。AI 会按本次需求另拟布光。','Wine stages suggest cool rim light and clear silhouettes; cool rooms use soft key and low fill. Neutral stills help inspect geometry. The AI makes a new choice for your request.'))),
     h('div',{className:'ck-row'},deskButton(L('登记并放入 DSH 会话','Record and draft in DSH'),function(){create(true);},!canCreate,true),
       deskButton(L('仅登记','Record only'),function(){create(false);},!canCreate)),
     h('p',{className:'ck-muted'},L('AI 只用受限本机工具产出静帧；会话草稿需你发送。没有图生图替代、自动扣费或自动通过。','AI uses a bounded local still-render tool. Send the draft yourself. No image-generation fallback, automatic charge or approval.'))));
@@ -59,8 +51,8 @@ function RenderWorkspace(props) {
     deskSelect(L('渲染请求','Render request'),selected?.id||'',[['',L('尚无记录','No requests yet')]].concat(requests.map(function(r){return [r.id,r.id.slice(7,15)+' · '+phase(r)];})),function(id){studio.put('deskRenderId',id);studio.put('deskRenderCompare','');},busy),
     selected?h(React.Fragment,null,h('p',{className:'ck-desk-meta'},L('基线 ','Base ')+selected.revisionId.slice(0,8)+' · '+selected.blendHash.slice(0,12)),h('p',{className:'ck-desk-brief'},selected.brief),
       stale?h('p',{className:'ck-callout'},L('旧修订记录仅供查看。重新渲染请为当前修订新建请求。','This record is from an older revision. Create a request for the current revision.')):null,
-      selected.status==='requested'&&!stale?h('div',{className:'ck-row'},deskButton(L('交给 DSH 会话','Draft for DSH'),function(){studio.handoffAiEdit('/studio/render/handoff',{requestId:selected.id},false);},busy||!!editor?.pendingJob,true),
-        deskButton(L('按登记方案本机试渲','Run local draft recipe'),function(){studio.action('/studio/render/run',{requestId:selected.id,expectedRevisionId:active.id},true);},busy||gateway||!boot.blenderBridge?.linked||!!editor?.pendingJob)):null,
+      state.lastDraft?.id===selected.id?h(DeskHandoffCopy,{studio:studio,result:state.lastDraft,lang:lang,disabled:busy}):null,
+      selected.status==='requested'&&!stale?deskButton(L('交给 DSH 会话','Draft for DSH'),function(){studio.handoffAiEdit('/studio/render/handoff',{requestId:selected.id},false);},busy||!!editor?.pendingJob,true):null,
       selected.status==='queued'?h('div',{className:'ck-row'},deskButton(L('接力收集回执','Draft collection handoff'),collectBrief,busy,true),
         !gateway?deskButton(L('收集回执','Collect'),function(){studio.action('/studio/render/collect',{requestId:selected.id},true);},busy):null):null,
       selected.error?h('p',{className:'ck-error-detail'},selected.error):null,

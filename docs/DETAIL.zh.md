@@ -1,7 +1,7 @@
-# Avatar Studio 0.6.0
+# Avatar Studio 0.6.1
 
 原画重建：同角度头体图库、11 槽、候选视口与六关检查器。素体改型：保留已有骨架、网格与形态键，衣 / 发 / 饰独立 Tripo 人工工单。独立渲染台从不可变 Blend 修订本机出图，和模型审批分离。不需原版 Charakuru，默认不调用付费云端，不随插件分发第三方模型。
 
 **实验版。** 形式校验、渲染和人审记录分别保存；后三关的启发式工序不是正式交付。工作台不代用户发布、上传、花积分或批准。
 
-[双路线与本机渲染](WORKBENCH-0.6.0.md) · [安装升级卸载](INSTALL-WINDOWS.md) · [建模操作](OPERATIONS.md) · [本版验证](VERIFICATION-0.6.0.md)
+[双路线与本机渲染](WORKBENCH-0.6.1.md) · [安装升级卸载](INSTALL-WINDOWS.md) · [建模操作](OPERATIONS.md) · [历史 0.6.0 验证](VERIFICATION-0.6.0.md)

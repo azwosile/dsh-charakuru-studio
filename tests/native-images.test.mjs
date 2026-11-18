@@ -22,7 +22,7 @@ async function prepared(t, withRef = false) {
 
 test('native Qwen recipe blocks remote/custom nodes and disconnected reference before upload', () => {
   const graph = buildQwenComfyRecipe();
-  assert.deepEqual(inspectQwenRecipe(graph),{loadId:'1',encodeId:'5',saveId:'8'});
+  assert.deepEqual(inspectQwenRecipe(graph),{loadId:'1',encodeId:'5',saveId:'8',sampleId:'6'});
   const unsafe = structuredClone(graph); unsafe[9]={class_type:'NonLocalNode',inputs:{}};
   assert.throws(()=>inspectQwenRecipe(unsafe),/核心节点/);
   delete graph[5].inputs['images.image_1'];

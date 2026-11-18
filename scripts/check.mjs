@@ -19,6 +19,7 @@ try {
   const options = { inputBlendPath: 'C:\\项目\\input.blend', existingBlendPath: 'C:\\项目\\input.blend', headGlbPath: 'C:\\项目\\head.glb', bodyGlbPath: 'C:\\项目\\body.glb', outputBlendPath: 'C:\\项目\\output.blend', outputVrmPath: 'C:\\项目\\avatar.vrm', vrmMeta: { title: `quote'"\\\n中文`, authors: ['fixture'], allowRedistribution: false } };
   await fs.copyFile(path.join(root,'lib/blender/studio-pipeline.py'),path.join(temp,'studio_pipeline.py'));
   await fs.copyFile(path.join(root,'lib/blender/render-studio.py'),path.join(temp,'render_studio.py'));
+  await fs.copyFile(path.join(root,'lib/blender/inspect-foundation.py'),path.join(temp,'inspect_foundation.py'));
   for (const [name, generator] of Object.entries(stages)) await fs.writeFile(path.join(temp, name + '.py'), generator(options));
   for (const referenceImage of [null, 'C:\\项目\\ref.png']) await fs.writeFile(path.join(temp, referenceImage ? 'qwen_ref.py' : 'qwen.py'), buildQwenLocalDiffusersScript({ projectDir: temp, views: compileTurnaroundPromptPack({ characterPrompt: `quote'"\\\n中文` }).views, referenceImage }));
   const python = process.env.DSH_CHECK_PYTHON || process.env.DSH_PYTHON_EXECUTABLE || 'python';

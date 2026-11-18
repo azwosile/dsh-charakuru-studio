@@ -355,7 +355,7 @@ test('tabs switch, keep state across remounts and follow the active language', a
 
   tree = mounted.runtime.render(Panel, mounted.face);
   assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, false, true, false, false, false]);
-  assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-model')), true, 'model picker is on screen');
+  assert.equal(hostNodes(nested(mounted,tree,'DeskImageWorkspace')).some(node=>node.type==='select'&&node.props.value==='qwen-image-2.1-local'), true, 'model picker is on screen');
   assert.equal(studio.getSnapshot().tab, 'models');
 
   // A fresh mount reuses the same store: the workbench does not reset on navigation.
@@ -630,7 +630,7 @@ test('every stage exposes its own material entry; desktop native path and web ra
     mounted.sandbox.window.location=new URL(desktop?'dsh-app://app/':'http://127.0.0.1:51886/');
     mounted.sandbox.window.__DSH_HOST_PATHS__={pathFor(input){assert.equal(input,file);pathForCalls++;return 'D:/外部/外部素材.png';}};
     mounted.sandbox.window.__DSH_DIRECTORY_PICKER__={pick:async()=>dir};
-    const boot={version:'0.6.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
+    const boot={version:'0.6.1',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
       projectState:{stateRevision:1,activeStageId:'1_concept',stages:{},assets:{items:[],selected:{}},materials:{items:[],selected:{}}},projectSummary:{}};
     studio.set({boot,loaded:true});studio.put('projectDir',dir);
     mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?boot:{ok:true});};
@@ -665,16 +665,37 @@ test('every stage exposes its own material entry; desktop native path and web ra
   }
 });
 
-test('the 0.6.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
+test('the 0.6.1 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
   const storage=new Map();const mounted=await mount({storage});const studio=mounted.face.studio;
-  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.6.0',activeProjectDir:'/test',sessionToken:'fixture'});
+  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.6.1',activeProjectDir:'/test',sessionToken:'fixture'});
   const wrong=await studio.act(()=>studio.refresh(true));
   assert.equal(wrong,undefined);assert.equal(studio.getSnapshot().boot,null);
-  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.6\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
+  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.6\.1/);assert.equal(storage.has('avatar-studio-loopback'),false);
   studio.put('base','http://127.0.0.1:52886');
   const correct=await studio.act(()=>studio.refresh(true));assert.equal(correct.sessionToken,'fixture');
   assert.equal(studio.getSnapshot().result.sessionToken,undefined);
   assert.equal(storage.get('avatar-studio-loopback'),'http://127.0.0.1:52886');
   studio.put('base','http://127.0.0.1:52887');assert.equal(studio.getSnapshot().boot,null);
   mounted.harness.dispose();
+});
+
+
+test('Tripo generation-confirmed panel uses native file picking only on DSH desktop',async()=>{
+  const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS }=await import('../lib/constants.js');
+  const { queryModelCatalog }=await import('../lib/catalog/aa-image-hub.js');
+  const mounted=await mount(),studio=mounted.face.studio;
+  const project={stateRevision:4,activeStageId:'3_tripo',assets:{items:[],selected:{}},stages:{},workflow:{mode:'illustration'},tripoStudio:{tickets:[{id:'fixture-ticket',part:'head',creditCap:5,quotedCredits:4,status:'generation_confirmed',inputs:[],downloads:[]}]}};
+  studio.set({tab:'tripo',loaded:true,boot:{projectExists:true,activeProjectDir:'fixture',projectState:project,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,aaCatalog:queryModelCatalog()}});
+  const panel=()=>mounted.runtime.render(mounted.main.component,mounted.face);
+  for(const [desktop,origin] of [[true,'dsh-app://app/'],[false,'http://127.0.0.1:54886/']]){
+    mounted.sandbox.window.location=new URL(origin);
+    const ticket=hostNodes(nested(mounted,panel(),'DeskTripoStudio'));
+    assert.equal(ticket.some(n=>n.type==='input'&&n.props.type==='file'),desktop);
+    assert.ok(ticket.some(n=>n.type==='a'&&n.props.href==='https://studio.tripo3d.ai/'&&n.props.target==='_blank'));
+    assert.ok(ticket.some(n=>n.type==='button'&&textOf(n)==='Collect a candidate (do not adopt)'));
+    assert.ok(!ticket.some(n=>n.type==='iframe'));
+  }
+  studio.set({tab:'models'});studio.put('model','mai-image-2.7');
+  const catalog=hostNodes(nested(mounted,panel(),'DeskImageWorkspace'));
+  assert.ok(!catalog.some(n=>n.type==='button'&&textOf(n)==='Generate selected views'));
 });

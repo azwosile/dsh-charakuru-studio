@@ -7,11 +7,12 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 
 先读取 `charakuru_project(action="status", projectDir=...)`。工程尚未创建时使用 `action="init"`，填写角色描述和账户实际月额度。所有工具明确传入 `projectDir`；默认目录固定，不随其他会话切换。
 
-## 0.6.0 双路线与渲染接力
+## 0.6.1 · AI 优先的双路线与渲染接力
 
-- 原画重建沿用六关。本机 `base_mesh` 另走素体与头模选择；工作台采用已登记的 `foundation_body` 后，才用 `import_material_scene` 打开审计。已有权重和脸必须优先保留。`fit_foundation` 指定 bodyObject、armature、相对 scale、已有 shapeValues；`append_foundation_head` 另需已采用的 `foundation_head`、明确网格名和头骨，只实验性刚性头骨跟随。绑定活动 `expectedRevisionId`；不声称自动颈缝、眼动或表情匹配。
-- 素体路线只对衣、发、饰做人工工单，不上传素体/头模/工程，不跨用账本。回来的单件自包含 GLB 按角色登记、追加、定位、重查权重。
-- 渲染从独立渲染台登记请求：`charakuru_render(action="status", projectDir, requestId)` 核对要求和底图修订；再用 `action="run"`、`expectedRevisionId` 与给定 `recipe` 调整本机静帧。只允许枚举镜头、布光及有限系数。不能使用对话里的任意 Python/路径代替渲染工具，不上传，不修改 Blend。返回 `queued` 时由提交的 execution 调 `collect`，超时先对回执、不重发。颜色与构图由用户单独批准/退回；Agent 无此动作。
+- 工作台交接到当前 DSH 会话的是草稿，用户发送才作业。建模用 `charakuru_blender_avatar(action="editor_inspect", projectDir, editRequestId)` 读取绑定修订的实际对象、键、骨架。随后用 `editor_operation`、该 `editRequestId` 和 `expectedRevisionId` 调用允许的工序。你要按自然语言目标拟定参数，不要让用户代填 XYZ、骨骼名或形态键；遇到无法安全判断的审美或授权再问。
+- `base_mesh` 先采用已登记的 `foundation_body` 再读取可信 Blend。`fit_foundation` 保留已有权重、UV、脸；用实际 `bodyObject`、`armature`、有界 scale 与已有 `shapeValues`。`append_foundation_head` 必须先等 editor_inspect 返回供体清单（`donorPending` 时同一调用收集），用已采用的 `foundation_head`，不猜名称。不声称自动焊颈、眼口或表情匹配。编辑后由用户批准/退回，不代审。
+- Tripo 工单：用 `charakuru_tripo_quota(action="studio_status", projectDir, ticketId)`。仅使用当前会话可用、用户明确授权的已登录 Chromium 标签页和 `https://studio.tripo3d.ai/`；没有浏览器工具则由用户照工单操作。`upload_authorized` 前不得上传；之后只使用工单的校验 PNG。报告提供商实际报价，用户确认后自己点 Generate。你不点生成、不记账、不自动重跑。下载后 `studio_collect` 只登记该工单回收目录内指定的自包含 GLB；用户挑候选。
+- `charakuru_render(action="status", projectDir, requestId)` 核对绑定修订和人类要求，再用 `run` + `expectedRevisionId` + 自行拟定的 `recipe`。镜头、取景、尺寸和 palette 必填；`preset=custom` 可设 bounded `lighting`，学习方案不作为默认。只用受限工具，不任意执行 Python、不上传、不改模型。返回 `queued` 在提交的 execution 调 `collect`，超时对回执而非重发。PNG 由用户单独审阅。
 
 ## 六个关卡
 
@@ -28,10 +29,10 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 
 `charakuru_aa_models(action="leaderboard")` 查询 2026-11-18 静态 AA v2.1 榜单与适配状态；`action="compile_prompts"` 编译逐槽提示词。基准名次不是接口、费用或视觉质量凭证。
 
-`charakuru_generate_views` 默认为导出预案。实际本机 `execute` 要求稳定的 `requestId`、真实启动的服务和用户明确需求。不要猜软件、模型权重可用，不要主动安装。云端只能由用户在工作台确认单槽、授权上传及费用后启动，Agent 工具不派发付费云端生成。
+`charakuru_generate_views` 默认为导出预案。实际本机 `execute` 要求稳定的 `requestId`、真实启动的服务和用户明确需求。传 `imageMode="text_to_image"` 或 `"image_to_image"`，后者没有工程 PNG 时失败，不改成文字。项目可保存逐模型参数与逐槽模板，执行沿用这些设置。不要猜软件、模型权重可用，不要主动安装。云端只能由用户在工作台确认单槽、授权上传及费用后启动，Agent 工具不派发付费云端生成。
 
 - Qwen：Diffusers 预案可用原画；兼容 HTTP 文生图不传原画。`qwen-image-2.1-comfy-edit` 需要 `comfyuiQwenWorkflowPath` 和一张的工程原画。模板验证通过仍不表示模型装齐。
-- Anima：内置图为文生图。Aesthetic 正负提示均去 score_*；Turbo 使用独立模型、CFG 1/8 步。仅在用户明确允许的文生图任务设置 `referenceMode="text_only"`。
+- Anima：内置图为文生图。Aesthetic 正负提示均去 score_*；Turbo 使用独立模型、CFG 1/8 步。仅在用户明确允许的文生图任务运行 Anima。
 - NovelAI V5 实验协议不传参考；V4.5 Precise Reference 单独选卡。官方 GPT/Gemini/Ark 与自配网关路由、凭据独立；榜单目录项无运行路由。
 
 成功产物要登记真实 PNG。重复生成已有槽位先保留新候选，不覆盖已选版本。未生成、失败、计费不确定时报告状态，不代验收、不换 ID 重发、不自动改用另一个服务。

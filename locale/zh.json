@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio 角色工作台",
-    "description": "0.6.0 实验版：原画重建／素体改型双路线，六关外部素材，按 Blender 修订接力的独立 AI 静帧渲染。默认本机且不上传；运行结果需人工审阅。",
+    "description": "0.6.1 实验版：双路线的 AI 建模和本机渲染审阅，Tripo 官方浏览器接力，ComfyUI 文／图生图、逐模型参数与可编辑提示词。云端默认关闭。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

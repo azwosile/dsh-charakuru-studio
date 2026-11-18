@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio",
-    "description": "0.6.0 experimental: illustration rebuild and base-mesh tailoring, external inputs at all six stages, and an independent AI-assisted local still renderer bound to Blender revisions. Human review remains separate.",
+    "description": "0.6.1 experimental: AI-guided editing and local render review, Tripo browser handoffs, explicit ComfyUI generation modes, per-model settings and editable prompts. Cloud execution off by default.",
     "detail": "docs/DETAIL.md"
   }
 }

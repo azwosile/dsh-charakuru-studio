@@ -6,7 +6,7 @@ import {tempProject,png,triangleGlb} from './fixtures.mjs';
 import {initOrUpdateProject,loadProjectState} from '../lib/project/state.js';
 import {setWorkflowMode,selectFoundation,planTripoParts,revisionFromSelectedBody} from '../lib/project/workflow.js';
 import {importProjectMaterial} from '../lib/project/materials.js';
-import {rollbackEditor,runEditorOperation,validateEditorParams} from '../lib/project/editor.js';
+import {rollbackEditor,runEditorOperation,validateEditorParams,createAiEditRequest,inspectAiEdit,reviewAiEditRequest} from '../lib/project/editor.js';
 import {validateRenderRecipe,createRenderRequest,getRenderRequest,runRender,reviewRender,renderContent,settleRender} from '../lib/project/render.js';
 import {startStudioHttpServer} from '../lib/host/server.js';
 import {buildStudioTools} from '../lib/tools/register-all.js';
@@ -31,9 +31,13 @@ function companion({gateway=false,waitOnce=false,wrongReport=false,transportErro
   async function execute(scriptFile) {
     const command=JSON.parse(JSON.parse((await fs.readFile(scriptFile,'utf8')).split('\n')[0].slice('COMMAND = '.length)));
     sent.push(command);
+    if(command.reportPath){
+      await fs.writeFile(command.reportPath,JSON.stringify({requestId:command.requestId,donorSha256:command.donorSha256,meshes:[{name:'Face',vertices:8,shapes:2,dimensions:[.2,.14,.15]}]}));
+      return {verdict:'pass',requestId:command.requestId};
+    }
     if (command.operation) {
       const C=command;
-      await Promise.all([fs.writeFile(C.outputs.blend,blend),fs.writeFile(C.outputs.preview,triangleGlb()),fs.writeFile(C.outputs.report,JSON.stringify({requestId:C.requestId,objects:[],gates:{},materialInput:C.material?{id:C.material.id,sha256:C.material.sha256}:null}))]);
+      await Promise.all([fs.writeFile(C.outputs.blend,blend),fs.writeFile(C.outputs.preview,triangleGlb()),fs.writeFile(C.outputs.report,JSON.stringify({requestId:C.requestId,objects:[{name:'Base',type:'MESH',vertices:160,dimensions:[.57,.28,1.5],shapeKeys:[{name:'Chest',value:0}]},{name:'Rig',type:'ARMATURE',bones:['Head','Neck']}],gates:{},materialInput:C.material?{id:C.material.id,sha256:C.material.sha256}:null}))]);
       return {verdict:'pass',requestId:C.requestId,outputs:C.outputs};
     }
     await fs.writeFile(path.join(command.output,'render.png'),png(...command.pixels));
@@ -169,4 +173,52 @@ test('render Gateway submits and collects with only the real recorded caller; lo
   const desktop=await fetch(origin+'/studio/render/content?'+q,{headers:{Origin:'dsh-app://app'}});
   assert.equal(desktop.status,200);assert.equal(desktop.headers.get('content-type'),'image/png');assert.equal(desktop.headers.get('access-control-allow-origin'),'dsh-app://app');
   const foreign=await fetch(origin+'/studio/render/content?'+q,{headers:{Origin:'https://example.net'}});assert.equal(foreign.status,403);
+});
+
+
+test('AI foundation proportion and donor requests inspect immutable inputs, enforce scope and return for review', async t=>{
+  const dir=await tempProject(t);await initOrUpdateProject(dir);const {fetchImpl,sent}=companion();
+  const body=await material(dir,'foundation_body'), donor=await material(dir,'foundation_head');
+  await setMode(dir,'base_mesh');await adopt(dir,'body',body.id);await adopt(dir,'head',donor.id);
+  const opened=await importLocal(dir,fetchImpl,body.id);
+  const common={projectDir:dir,blenderPluginUrl:base,fetchImpl,expectedRevisionId:opened.revisionId};
+  const fit=await createAiEditRequest({...common,intent:'foundation_fit',prompt:'Make the body slightly taller; retain topology and the rig.'});
+  assert.match(fit.instruction,/editor_inspect/);assert.match(fit.instruction,/不要让用户代填/);
+  const tool=buildStudioTools({config:{blenderPluginUrl:base}}).find(x=>x.name==='charakuru_blender_avatar');
+  const summary=await tool.execute({action:'editor_inspect',projectDir:dir,editRequestId:fit.request.id});assert.equal(summary.ok,true);
+  assert.deepEqual(summary.allowed,['fit_foundation']);assert.equal(summary.inventory[0].shapeKeys[0].name,'Chest');
+  await assert.rejects(runEditorOperation({...common,editRequestId:fit.request.id,operation:'transform',params:{objects:['Base']}}),/outside/);
+  const out=await runEditorOperation({...common,editRequestId:fit.request.id,operation:'fit_foundation',params:{bodyObject:'Base',armature:'Rig',scale:[1,1,1.04]}});
+  const after=await current(dir);
+  assert.equal(after.editor.requests.find(r=>r.id===fit.request.id).status,'ready_for_review');
+  await assert.rejects(createAiEditRequest({...common,expectedRevisionId:out.revisionId,prompt:'Another edit'}),/Approve or reject/);
+  assert.equal((await reviewAiEditRequest({...common,requestId:fit.request.id,revisionId:out.revisionId,decision:'reject'})).activeRevisionId,opened.revisionId);
+  const head=await createAiEditRequest({...common,intent:'foundation_head',prompt:'Pare down to the donor face if the proportions fit.'});
+  const params={materialId:donor.id,objects:['Face'],headBone:'Head'};
+  await assert.rejects(runEditorOperation({...common,editRequestId:head.request.id,operation:'append_foundation_head',params}),/editor_inspect/);
+  const view=await inspectAiEdit({...common,requestId:head.request.id});assert.equal(view.donor.meshes[0].name,'Face');
+  assert.equal(await editId(dir),opened.revisionId,'inspection does not create or activate a modeling revision');
+  await assert.rejects(runEditorOperation({...common,editRequestId:head.request.id,operation:'append_foundation_head',params:{...params,objects:['Guess']}}),/named donor/);
+  const graft=await runEditorOperation({...common,editRequestId:head.request.id,operation:'append_foundation_head',params});
+  const reviewed=await reviewAiEditRequest({...common,requestId:head.request.id,revisionId:graft.revisionId,decision:'approve'});
+  assert.equal(reviewed.request.status,'approved');assert.equal(reviewed.activeRevisionId,graft.revisionId);
+  assert.equal(sent.length,4);
+});
+
+test('0.6.1 HTTP render request defers artistic choices to the agent; human direct execution and incomplete recipes cannot run',async t=>{
+  const dir=await tempProject(t);await initOrUpdateProject(dir);const {fetchImpl,sent}=companion();
+  const edit=await importLocal(dir,fetchImpl),baseState=await current(dir);
+  const api=await startStudioHttpServer({port:0,config:{registryFile:path.join(dir,'recents.json')}});t.after(()=>api.close());
+  const {sessionToken}=await (await fetch(api.baseUrl+'/studio/session')).json();
+  const post=opts=>fetch(api.baseUrl+'/studio/render/request',{method:'POST',headers:{'Content-Type':'application/json','X-Charakuru-Session':sessionToken,Origin:'dsh-app://app'},body:JSON.stringify({projectDir:dir,brief:'Slight side angle, soft cyan rim, darker background',expectedRevisionId:edit.revisionId,...opts})});
+  assert.equal((await post({recipe:{preset:'wine_stage'}})).status,400);
+  const request=await (await post({})).json();assert.equal(request.request.suggestion,null);assert.equal(request.request.policy,'agent_recipe');assert.match(request.instruction,/可为 custom/);
+  const args={projectDir:dir,requestId:request.request.id,expectedRevisionId:edit.revisionId,blenderPluginUrl:base,fetchImpl};
+  const recipe={preset:'custom',camera:'profile',framing:'portrait',size:'draft',lighting:{backdrop:[.012,.04,.07],rimColor:[.35,.9,1],floor:false},rim:.75};
+  await assert.rejects(runRender({...args,recipe,actor:'human'}),/DSH agent/);
+  await assert.rejects(runRender({...args,recipe:{preset:'custom'}}),/DSH agent/);
+  assert.throws(()=>validateRenderRecipe({...recipe,lighting:{rimColor:[2,1,1]}}),/0 to 1/);
+  const pass=await runRender({...args,recipe});assert.equal(pass.request.status,'ready_for_review');
+  assert.deepEqual(sent.at(-1).settings.rimColor,recipe.lighting.rimColor);assert.equal(sent.at(-1).settings.floor,false);
+  assert.deepEqual((await current(dir)).editor,baseState.editor);
 });
