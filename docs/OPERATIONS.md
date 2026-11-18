@@ -9,6 +9,7 @@
 | operation | 关键参数 | 限制 |
 |---|---|---|
 | import_blend | sourceBlend, vrmAddonPath | 新工程也可导入；来源必须由用户明确选择 |
+| import_checkpoint | 可选 vrmAddonPath | 只接力本工程当前有效并已指纹登记的 Blender 检查点；草案仍须审阅 |
 | audit | 可选 armature | 结构和纹理检查，不是质量审批 |
 | head_scale | factor 0.75～1.25, armature, headBone, pivotBone | 对头骨与后代发骨的权重顶点/shape keys 联动，颈部过渡仍需检查 |
 | transform | objects, scale, translation | 只操作明确 mesh，不执行任意 Python |
@@ -32,7 +33,9 @@
 
 ## AI 请求与审批
 
-选中对象、视角并登记要求，服务保存 baseRevisionId、Blend hash、对象与相机。返回给 Agent 的指令使用 `charakuru_blender_avatar` 的 `editor_operation` 与 `expectedRevisionId`。请求登记本身不调用模型，不执行自由文本 Python。执行后仍需审阅。P2/P3 尚未开放“成品自动审批”。
+选中对象和视角，填写要求后点击「准备 DSH 会话草稿」。请求绑定 `baseRevisionId`、Blend SHA-256、对象和相机；用户在 DSH 会话检查后再发送。没有打开会话时，请求会保存，之后可重新插入，无需复制路径或重复建单。
+
+Agent 调用 `charakuru_blender_avatar` 的 `editor_operation`，同时传入 `editRequestId` 和 `expectedRevisionId`。成功后生成新版本和待审阅结果，作业异步时先执行 `editor_collect`。返回工作台，点击「载入工程」，预览后接受修改或恢复上一个版本。旧版本和被拒绝的产物仍保留。请求不执行自由文本 Python，不自动发送会话，也不代替整套模型的成品验收。
 
 ## 常见错误
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-charakuru-studio",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Avatar Studio: independent local-first DSH avatar workbench with immutable Blender revisions, offline Three.js/VRM preview and conservative manual budget ledger. Experimental release; cloud adapters unverified and disabled by default.",
   "license": "MIT",
   "author": {

@@ -386,7 +386,7 @@ try:
         spring_setup()
     elif operation=='pose_check':
         pose_check()
-    elif operation not in {'import_blend','audit','export_vrm'}:
+    elif operation not in {'import_blend','import_checkpoint','audit','export_vrm'}:
         raise RuntimeError('Unknown operation')
     report=audit()
     require(not report['missingImages'],'Missing source images: '+','.join(report['missingImages']))

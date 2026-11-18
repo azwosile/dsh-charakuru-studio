@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
-import { tempProject } from './fixtures.mjs';
+import { png, tempProject } from './fixtures.mjs';
 import { startStudioHttpServer } from '../lib/host/server.js';
 import { loadProjectState } from '../lib/project/state.js';
 
@@ -38,4 +38,28 @@ test('actual loopback HTTP: isolated projects, user review and request boundarie
   assert.equal(hostileHost, 403);
   await fs.writeFile(path.join(a, 'project.charastudio.json'), 'broken');
   assert.equal((await fetch(srv.baseUrl + '/studio/bootstrap?projectDir=' + encodeURIComponent(a))).status, 400);
+});
+
+test('actual loopback HTTP: original illustration is versioned separately from generated view slots', async t => {
+  const dir=await tempProject(t), projectDir=path.join(dir,'p'), source=path.join(dir,'source.png');
+  await fs.writeFile(source,png());
+  const srv=await startStudioHttpServer({port:0,config:{registryFile:path.join(dir,'recent.json')}});
+  t.after(()=>srv.close());
+  const {sessionToken}=await (await fetch(srv.baseUrl+'/studio/session')).json();
+  const post=(route,body)=>fetch(srv.baseUrl+route,{method:'POST',headers:{'Content-Type':'application/json','X-Charakuru-Session':sessionToken},body:JSON.stringify({projectDir,...body})});
+  assert.equal((await post('/studio/project/init',{projectName:'Original'})).status,200);
+  const response=await post('/studio/assets/import',{sourcePath:source,kind:'image',slotId:'source'});
+  assert.equal(response.status,200);
+  const {asset,projectState}=await response.json();
+  assert.equal(projectState.assets.selected.source,asset.id);
+  assert.deepEqual(projectState.characterSpec.sourceImages,[asset.filePath]);
+  assert.equal(Object.values(projectState.views).filter(view=>view.status==='ready').length,0);
+  assert.deepEqual(await fs.readFile(source),png());
+  const downloaded=await fetch(srv.baseUrl+'/studio/assets/content?'+new URLSearchParams({projectDir,id:asset.id,access:sessionToken}));
+  assert.equal(downloaded.headers.get('content-type'),'image/png');
+  assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()),png());
+  assert.equal((await post('/studio/project/init',{sourceImage:''})).status,200);
+  const reset=(await loadProjectState(projectDir)).state;
+  assert.equal(reset.assets.selected.source,undefined);
+  assert.equal(reset.assets.items.length,1,'previous original is retained');
 });

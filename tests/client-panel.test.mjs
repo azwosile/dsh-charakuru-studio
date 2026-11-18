@@ -302,10 +302,10 @@ test('the page renders a workbench shell with a tab rail and no dialog chrome', 
   assert.equal(headings.length, 1);
   assert.equal(textOf(headings[0]).trim(), 'Character → VRM studio');
 
-  // 5 tabs, exactly one selected, all pointing at the same panel region.
+  // 8 tabs, exactly one selected, all pointing at the same panel region.
   const tabs = byRole(tree, 'tab');
-  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false]);
-  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1]);
+  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false, false]);
+  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1, -1]);
   assert.equal(textOf(tabs[0]).includes('Project & reviews'), true);
   const rail = byRole(tree, 'tablist')[0];
   assert.equal(rail.props['aria-orientation'], 'vertical');
@@ -352,13 +352,13 @@ test('tabs switch, keep state across remounts and follow the active language', a
   });
 
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false, false]);
   assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-model')), true, 'model picker is on screen');
   assert.equal(studio.getSnapshot().tab, 'models');
 
   // A fresh mount reuses the same store: the workbench does not reset on navigation.
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false, false]);
 
   // Language switch: labels resolve through the locale service on both surfaces.
   mounted.harness.setLanguage('zh');
@@ -374,11 +374,11 @@ test('tabs switch, keep state across remounts and follow the active language', a
     current.props.onKeyDown({ key: name, preventDefault() {} });
     return studio.getSnapshot().tab;
   };
-  assert.equal(press('End'), 'credentials');
+  assert.equal(press('End'), 'kit');
   assert.equal(press('ArrowDown'), 'pipeline');
-  assert.equal(press('ArrowUp'), 'credentials');
+  assert.equal(press('ArrowUp'), 'kit');
   assert.equal(press('Home'), 'pipeline');
-  assert.equal(press('ArrowLeft'), 'credentials');
+  assert.equal(press('ArrowLeft'), 'kit');
 });
 
 test('inserting instructions appends to the draft of the session the main view retains', async () => {
@@ -558,4 +558,57 @@ test('active project identity persists across a fresh client instance', async()=
   input.props.onChange({target:{value:'D:/Second project'}});assert.equal(storage.get('avatar-studio-active-project'),'D:/Second project');
   const second=await mount({storage});const again=second.runtime.render(second.main.component,second.face);
   assert.ok(hostNodes(again).some(n=>n.type==='input'&&n.props.value==='D:/Second project'));
+});
+
+test('local Kit is opt-in, framed in both DSH local contexts, and never proxied by the client', async () => {
+  for (const origin of ['http://127.0.0.1:51886/', 'dsh-app://app/', 'https://dsh.example.org/', 'http://127.0.0.1:8766/']) {
+    const mounted = await mount();
+    mounted.sandbox.window.location = new URL(origin);
+    const render = () => mounted.runtime.render(mounted.main.component, mounted.face);
+    const activate = byRole(render(), 'tab').find(node => textOf(node).includes('Local Charakuru Kit'));
+    activate.props.onClick();
+    let nodes = hostNodes(render());
+    assert.equal(nodes.some(node => node.type === 'iframe'), false);
+    const load = nodes.find(node => node.type === 'button' && textOf(node).includes('Load the local Kit'));
+    const shouldLoad = origin.includes('51886') || origin.startsWith('dsh-app:');
+    assert.equal(Boolean(load), shouldLoad);
+    if (load) {
+      load.props.onClick();
+      nodes = hostNodes(render());
+      const iframe = nodes.find(node => node.type === 'iframe');
+      assert.equal(iframe.props.src, 'http://127.0.0.1:8766/');
+      assert.equal(iframe.props.referrerPolicy, 'no-referrer');
+      assert.match(iframe.props.sandbox, /allow-scripts/);
+      assert.doesNotMatch(iframe.props.sandbox, /allow-top-navigation|allow-popups/);
+      nodes.find(node => node.type === 'button' && textOf(node).includes('Unload the Kit')).props.onClick();
+      assert.equal(hostNodes(render()).some(node => node.type === 'iframe'), false);
+    }
+    mounted.harness.dispose();
+  }
+});
+
+test('AI handoff registers once, prepares a draft, and does not send or require an open session', async () => {
+  const drafts = [];
+  const mounted = await mount({ services: {
+    sessions: { list: { getSnapshot: () => ({ byId: { current: { retainedBy: { mainView: 1 } } } }) }, binding: (id) => ({ sessionId: id }) },
+    conversation: { input: { requestDraftInitialization: (binding, payload) => { drafts.push([binding,payload]); } } },
+    layout: { selectPanel() {} },
+  } });
+  const calls = [];
+  mounted.sandbox.fetch = async (url, init) => {
+    calls.push([url, init.method]);
+    return { ok:true, status:200, json:async () => ({ ok:true, instruction:'request-ID into DSH' }) };
+  };
+  const studio = mounted.face.studio;
+  const result = await studio.handoffAiEdit('/studio/editor/ai-request', { prompt:'Move cube', expectedRevisionId:'base-1' }, true);
+  assert.equal(result.draftOutcome, 'ok');
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0][1].prompt, 'request-ID into DSH');
+  assert.deepEqual(calls.map(([url,method]) => [new URL(url).pathname,method]), [['/studio/editor/ai-request','POST'],['/studio/bootstrap','GET']]);
+  mounted.harness.services.delete('sessions');
+  const retry = await studio.handoffAiEdit('/studio/editor/ai-handoff', {requestId:'one'}, false);
+  assert.equal(retry.draftOutcome, 'unsupported');
+  assert.match(studio.getSnapshot().notice, /Request saved/);
+  assert.equal(drafts.length, 1);
+  mounted.harness.dispose();
 });

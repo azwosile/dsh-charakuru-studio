@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempProject, png, triangleGlb } from './fixtures.mjs';
-import { initOrUpdateProject,loadProjectState } from '../lib/project/state.js';
-import { validateEditorParams,runEditorOperation,rollbackEditor,createAiEditRequest,setEditorView,editorContent } from '../lib/project/editor.js';
+import { initOrUpdateProject,loadProjectState,updateProjectState } from '../lib/project/state.js';
+import { validateEditorParams,runEditorOperation,rollbackEditor,createAiEditRequest,prepareAiEditHandoff,reviewAiEditRequest,setEditorView,editorContent } from '../lib/project/editor.js';
 import { createAccountBudget } from '../lib/providers/account-budget.js';
 import { runTurnaroundGeneration } from '../lib/providers/image-router.js';
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -49,8 +49,56 @@ test('P2 AI request binds selected objects, camera and revision rather than exec
   const base=await runEditorOperation({projectDir:dir,operation:'import_blend',params:{sourceBlend:source},fetchImpl:mockCompanion});
   const out=await createAiEditRequest({projectDir:dir,prompt:'Make the head 5% smaller',objects:['Head'],camera:'left',expectedRevisionId:base.revisionId});
   assert.equal(out.request.baseRevisionId,base.revisionId);assert.equal(out.request.status,'requested');
-  await assert.rejects(createAiEditRequest({projectDir:dir,prompt:'edit',objects:['unknown']}),/unknown objects/);
+  await assert.rejects(createAiEditRequest({projectDir:dir,prompt:'edit',objects:['unknown'],expectedRevisionId:base.revisionId}),/unknown objects/);
   await setEditorView({projectDir:dir,camera:'right',overlayOpacity:.5});assert.equal((await loadProjectState(dir)).state.editor.view.camera,'right');
+});
+test('Editor AI handoff is bound to a fingerprinted base and requires a separate visual review', async t => {
+  const dir = await tempProject(t), source = path.join(dir,'source.blend');
+  await fs.writeFile(source,'BLENDER-v500source');
+  const run = opts => runEditorOperation({ projectDir:dir, fetchImpl:mockCompanion, ...opts });
+  const base = await run({ operation:'import_blend', params:{sourceBlend:source} });
+  const {request} = await createAiEditRequest({ projectDir:dir, prompt:'Shift head', objects:['Head'], expectedRevisionId:base.revisionId });
+  const body = { operation:'transform', params:{objects:['Head'],translation:[.1,0,0]}, editRequestId:request.id };
+  const handoff = await prepareAiEditHandoff({ projectDir:dir, requestId:request.id });
+  assert.match(handoff.instruction, /charakuru_blender_avatar/);
+  assert.ok(handoff.instruction.includes(request.id));
+  await assert.rejects(run(body),/base revision/);
+  await assert.rejects(run({...body,expectedRevisionId:base.revisionId,editRequestId:'missing'}),/not found/);
+  await assert.rejects(run({...body,operation:'import_blend',expectedRevisionId:base.revisionId}),/editing operation/);
+  const revision = await run({...body,expectedRevisionId:base.revisionId});
+  assert.equal(revision.editRequestId,request.id);
+  assert.equal(revision.editor.requests[0].status,'ready_for_review');
+  assert.equal(revision.editor.requests[0].resultRevisionId,revision.revisionId);
+  await assert.rejects(reviewAiEditRequest({projectDir:dir,requestId:request.id,revisionId:base.revisionId,decision:'approve'}),/base revision/);
+  const approved = await reviewAiEditRequest({projectDir:dir,requestId:request.id,revisionId:revision.revisionId,decision:'approve'});
+  assert.equal(approved.request.status,'approved');
+  assert.equal(approved.activeRevisionId,revision.revisionId);
+  await assert.rejects(run({...body,expectedRevisionId:revision.revisionId}),/already been processed/);
+  const next = await createAiEditRequest({projectDir:dir,prompt:'Change again',expectedRevisionId:revision.revisionId});
+  const later = await run({...body,editRequestId:next.request.id,expectedRevisionId:revision.revisionId});
+  const rejected = await reviewAiEditRequest({projectDir:dir,requestId:next.request.id,revisionId:later.revisionId,decision:'reject'});
+  assert.equal(rejected.request.status,'rejected');
+  assert.equal(rejected.activeRevisionId,revision.revisionId);
+  assert.ok((await loadProjectState(dir)).state.editor.revisions.some(old => old.id===later.revisionId));
+  assert.equal(await fs.readFile(source,'utf8'),'BLENDER-v500source');
+});
+
+test('the editor adopts only a verified current project Blender checkpoint into a new revision', async t => {
+  const dir = await tempProject(t), source = path.join(dir,'assembled.blend');
+  await initOrUpdateProject(dir);
+  await assert.rejects(runEditorOperation({projectDir:dir,operation:'import_checkpoint',fetchImpl:mockCompanion}),/No current/);
+  await fs.writeFile(source,'BLENDER-v500assembly');
+  await updateProjectState(dir, state => {
+    state.blenderState.activeBlendFile = source;
+    state.blenderState.lastRun = { operation:'stage2_assembly_ratio', artifacts:[{
+      path:source,sha256:hash('BLENDER-v500assembly'),validation:'blend_container_only',
+    }] };
+  });
+  const adopted = await runEditorOperation({projectDir:dir,operation:'import_checkpoint',expectedRevisionId:null,fetchImpl:mockCompanion});
+  assert.equal(adopted.editor.revisions[0].operation,'import_checkpoint');
+  assert.equal(await fs.readFile(source,'utf8'),'BLENDER-v500assembly');
+  await fs.appendFile(source,'changed');
+  await assert.rejects(runEditorOperation({projectDir:dir,operation:'import_checkpoint',expectedRevisionId:adopted.revisionId,fetchImpl:mockCompanion}),/changed on disk/);
 });
 test('P4 account holds are shared across projects and concurrent reservation cannot overspend',async t=>{
   const dir=await tempProject(t),ledger=createAccountBudget(dir);await ledger.configure({accountId:'test-account',channel:'tripo_studio',period:'2026-11',limit:10});
