@@ -193,7 +193,7 @@ async function loadClient(storage = new Map()) {
     window: { __ModuleLoader__: { load(value) { spec = value; } } },
     localStorage: {getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     console,
-    URL,
+    URL, URLSearchParams,
     AbortController,
     setTimeout,
     clearTimeout,
@@ -302,10 +302,10 @@ test('the page renders a workbench shell with a tab rail and no dialog chrome', 
   assert.equal(headings.length, 1);
   assert.equal(textOf(headings[0]).trim(), 'Character → VRM studio');
 
-  // 7 tabs, exactly one selected, all pointing at the same panel region.
+  // 8 tabs, exactly one selected, all pointing at the same panel region.
   const tabs = byRole(tree, 'tab');
-  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false]);
-  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1]);
+  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false, false]);
+  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1, -1]);
   assert.equal(textOf(tabs[0]).includes('Project & reviews'), true);
   const rail = byRole(tree, 'tablist')[0];
   assert.equal(rail.props['aria-orientation'], 'vertical');
@@ -352,13 +352,13 @@ test('tabs switch, keep state across remounts and follow the active language', a
   });
 
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, true, false, false, false]);
   assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-model')), true, 'model picker is on screen');
   assert.equal(studio.getSnapshot().tab, 'models');
 
   // A fresh mount reuses the same store: the workbench does not reset on navigation.
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, false, true, false, false, false]);
 
   // Language switch: labels resolve through the locale service on both surfaces.
   mounted.harness.setLanguage('zh');
@@ -571,7 +571,7 @@ test('native workbench has stage navigation on both DSH renderer contracts witho
     studio.set({loaded:true,boot:{stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,projectExists:true,activeProjectDir:'fixture',
       projectState:{activeStageId:'2_views',projectName:'Native',stages,views:{},assets:{items:[],selected:{}}},projectSummary:{completedStages:1,readyViews:0,remainingFreeCredits:0,percent:16}}});
     const tree = render();
-    assert.equal(byRole(tree,'tab').length,7);
+    assert.equal(byRole(tree,'tab').length,8);
     assert.equal(hostNodes(tree).some(node=>node.type==='iframe'),false);
     assert.equal(hostNodes(tree).filter(node=>node.type==='li'&&node.props.className==='ck-stage').length,6);
     const here=hostNodes(tree).find(node=>node.props['aria-current']==='step');
@@ -614,5 +614,61 @@ test('AI handoff registers once, prepares a draft, and does not send or require 
   assert.equal(retry.draftOutcome, 'unsupported');
   assert.match(studio.getSnapshot().notice, /Request saved/);
   assert.equal(drafts.length, 1);
+  mounted.harness.dispose();
+});
+
+test('every stage exposes its own material entry; desktop native path and web raw upload have explicit fallback', async () => {
+  const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
+  const { MATERIAL_ROLES } = await import('../lib/project/material-roles.js');
+  for (const desktop of [true,false]) {
+    const mounted=await mount();const studio=mounted.face.studio, calls=[];
+    const file={name:'外部素材.png',size:128,path:'do-not-use-this-removed-property'};
+    const dir=desktop?'D:/Studio/角色':'/tmp/roles-fixture';let pathForCalls=0;
+    mounted.sandbox.window.location=new URL(desktop?'dsh-app://app/':'http://127.0.0.1:51886/');
+    mounted.sandbox.window.__DSH_HOST_PATHS__={pathFor(input){assert.equal(input,file);pathForCalls++;return 'D:/外部/外部素材.png';}};
+    mounted.sandbox.window.__DSH_DIRECTORY_PICKER__={pick:async()=>dir};
+    const boot={version:'0.5.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
+      projectState:{stateRevision:1,activeStageId:'1_concept',stages:{},assets:{items:[],selected:{}},materials:{items:[],selected:{}}},projectSummary:{}};
+    studio.set({boot,loaded:true});studio.put('projectDir',dir);
+    mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?boot:{ok:true});};
+    const panel=()=>mounted.runtime.render(mounted.main.component,mounted.face);
+    let tree=panel();assert.equal(byClass(tree,'ck-page')[0].props['data-shell'],desktop?'desktop':'web');
+    const steps=byClass(tree,'ck-stage-list').flatMap(n=>hostNodes(n).filter(child=>child.type==='button' && textOf(child)==='Import at this step'));
+    assert.equal(steps.length,6);
+    const folder=hostNodes(tree).find(n=>n.type==='button' && textOf(n)==='Choose project folder');
+    assert.equal(!!folder,desktop);
+    if(folder){folder.props.onClick();await new Promise(setImmediate);assert.equal(new URL(calls.pop().url).searchParams.get('projectDir'),dir);}
+    for (const [i,step] of steps.entries()) {step.props.onClick();assert.equal(studio.getSnapshot().form.materialStage,PIPELINE_STAGES[i].id);}
+    steps[0].props.onClick();
+    const nested=hostNodes(panel()).find(node=>typeof node.type==='function'&&node.type.name==='MaterialWorkspace');
+    tree=mounted.runtime.render(nested.type,nested.props);
+    assert.equal(byClass(tree,'ck-material-steps')[0].children.length,6);
+    const picker=hostNodes(tree).find(n=>n.type==='input'&&n.props.type==='file');assert.equal(picker.props.accept,'.png');
+    picker.props.onChange({target:{files:[file],value:'picked'}});await new Promise(setImmediate);
+    const sent=calls.find(row=>row.init.method==='POST');assert.ok(sent);
+    if(desktop){
+      assert.equal(new URL(sent.url).pathname,'/studio/materials/import');assert.equal(pathForCalls,1);
+      const payload=JSON.parse(sent.init.body);assert.equal(payload.sourcePath,'D:/外部/外部素材.png');assert.equal(payload.stageId,'1_concept');assert.equal(payload.expectedRevision,1);
+    }else{
+      const url=new URL(sent.url);assert.equal(url.pathname,'/studio/materials/upload');assert.equal(url.searchParams.get('fileName'),file.name);
+      assert.equal(sent.init.body,file);assert.equal(sent.init.headers['Content-Type'],'application/octet-stream');assert.equal(pathForCalls,0);
+    }
+    assert.equal(sent.init.redirect,'error');assert.equal(sent.init.headers['X-Charakuru-Session'],'fixture-session');
+    assert.doesNotMatch(sent.url+JSON.stringify(sent.init.headers),/do-not-use/);
+    mounted.harness.dispose();
+  }
+});
+
+test('the 0.5.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
+  const storage=new Map();const mounted=await mount({storage});const studio=mounted.face.studio;
+  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.5.0',activeProjectDir:'/test',sessionToken:'fixture'});
+  const wrong=await studio.act(()=>studio.refresh(true));
+  assert.equal(wrong,undefined);assert.equal(studio.getSnapshot().boot,null);
+  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.5\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
+  studio.put('base','http://127.0.0.1:52886');
+  const correct=await studio.act(()=>studio.refresh(true));assert.equal(correct.sessionToken,'fixture');
+  assert.equal(studio.getSnapshot().result.sessionToken,undefined);
+  assert.equal(storage.get('avatar-studio-loopback'),'http://127.0.0.1:52886');
+  studio.put('base','http://127.0.0.1:52887');assert.equal(studio.getSnapshot().boot,null);
   mounted.harness.dispose();
 });

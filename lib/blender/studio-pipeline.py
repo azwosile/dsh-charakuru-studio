@@ -27,7 +27,7 @@ def enable_vrm():
 def rig():
     found = bpy.data.objects.get(P.get('armature', ''))
     if found is None:
-        candidates = [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']
+        candidates = [o for o in bpy.context.scene.objects if o.type == 'ARMATURE' and not o.get('avatar_studio_weight_reference')]
         require(len(candidates) == 1, 'Choose one explicit armature')
         found = candidates[0]
     require(found.type == 'ARMATURE', 'Selected armature is not a rig')
@@ -38,7 +38,7 @@ def visible_meshes():
 
 def select_export():
     bpy.ops.object.select_all(action='DESELECT')
-    selected = visible_meshes() + [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']
+    selected = visible_meshes() + [o for o in bpy.context.scene.objects if o.type == 'ARMATURE' and not o.get('avatar_studio_weight_reference')]
     for o in selected:
         o.hide_set(False)
         o.select_set(True)
@@ -306,6 +306,51 @@ def material_check():
     require(checked>0,'No render materials found')
     notes.append('Material operation validates existing materials and packed texture availability; it does not claim automatic texture reconstruction.')
 
+def append_material_mesh():
+    material = C['material']
+    before = {obj.as_pointer() for obj in bpy.context.scene.objects}
+    result = bpy.ops.import_scene.gltf(filepath=material['path'])
+    imported = [obj for obj in bpy.context.scene.objects if obj.as_pointer() not in before]
+    require('FINISHED' in result and any(obj.type == 'MESH' for obj in imported), 'Imported GLB contains no mesh')
+    donor = material['role'] == 'weight_mesh'
+    for obj in imported:
+        obj['avatar_studio_material_id'] = material['id']
+        if donor:
+            obj['avatar_studio_weight_reference'] = True
+            obj.hide_render = True
+    notes.append('External GLB appended as '+('non-exporting weight reference objects' if donor else 'new objects')+': '+', '.join(o.name for o in imported))
+    if donor:
+        notes.append('No weights were transferred. Choose corresponding bones and explicitly run transfer_weights.')
+
+def apply_material_texture():
+    material = C['material']
+    slot_index = P['textureSlot']
+    image = bpy.data.images.load(material['path'], check_existing=False)
+    image.pack()
+    for name in P['objects']:
+        obj = bpy.context.scene.objects.get(name)
+        require(obj is not None and obj.type == 'MESH' and obj.data.uv_layers.active, 'Choose a mesh with active UVs: '+name)
+        require(len(obj.material_slots) > slot_index or (not obj.material_slots and slot_index == 0), 'Material slot does not exist on '+name)
+        if not obj.material_slots:
+            obj.data = obj.data.copy()
+            obj.data.materials.append(bpy.data.materials.new(name+'_BaseColor'))
+        slot = obj.material_slots[slot_index]
+        old = slot.material
+        mat = old.copy() if old else bpy.data.materials.new(name+'_BaseColor')
+        mat.use_nodes = True
+        require(mat.node_tree is not None, 'Missing shader node graph on '+name)
+        bsdfs = [node for node in mat.node_tree.nodes if node.type=='BSDF_PRINCIPLED']
+        require(len(bsdfs)==1, 'Expected one Principled BSDF for Base Color on '+name)
+        bsdf = bsdfs[0]
+        tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
+        tex.label = 'Avatar Studio external base color'
+        tex.image = image
+        tex.location = (bsdf.location.x-300, bsdf.location.y)
+        mat.node_tree.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+        slot.link = 'OBJECT'
+        slot.material = mat
+    notes.append('Packed external PNG was connected as Base Color on explicit targets only; UVs, other channels and earlier revisions were preserved.')
+
 def audit():
     objects=[]
     for obj in bpy.context.scene.objects:
@@ -330,7 +375,7 @@ def audit():
         objects.append(row)
     missing=[i.name for i in bpy.data.images if i.source=='FILE' and not i.packed_file and i.filepath and not os.path.isfile(bpy.path.abspath(i.filepath))]
     meshes=[o for o in objects if o['type']=='MESH' and not o['helper']]
-    return {'requestId':C['requestId'],'blenderVersion':bpy.app.version_string,'operation':C['operation'],'objects':objects,'missingImages':missing,'gates':{'textures':not missing,'weights':bool(meshes) and all(o['unweighted']==0 and o['nonNormalized']==0 for o in meshes)},'notes':notes,'visualReview':'required','expressions':P.get('expressions','preserve'),'sourceFilesModified':False}
+    return {'requestId':C['requestId'],'blenderVersion':bpy.app.version_string,'operation':C['operation'],'objects':objects,'missingImages':missing,'gates':{'textures':not missing,'weights':bool(meshes) and all(o['unweighted']==0 and o['nonNormalized']==0 for o in meshes)},'notes':notes,'visualReview':'required','expressions':P.get('expressions','preserve'),'sourceFilesModified':False,'materialInput':{'id':C['material']['id'],'sha256':C['material']['sha256'],'role':C['material']['role']} if C.get('material') else None}
 
 def pose_check():
     arm=rig()
@@ -374,6 +419,10 @@ try:
             require(obj is not None and obj.type=='MESH','Explicit mesh selection required: '+name)
             obj.scale=Vector([a*b for a,b in zip(obj.scale,P.get('scale',[1,1,1]))])
             obj.location+=Vector(P.get('translation',[0,0,0]))
+    elif operation=='append_material_mesh':
+        append_material_mesh()
+    elif operation=='apply_material_texture':
+        apply_material_texture()
     elif operation=='transfer_weights':
         transfer_weights()
     elif operation=='normalize_weights':
@@ -386,7 +435,7 @@ try:
         spring_setup()
     elif operation=='pose_check':
         pose_check()
-    elif operation not in {'import_blend','import_checkpoint','audit','export_vrm'}:
+    elif operation not in {'import_blend','import_checkpoint','import_material_scene','audit','export_vrm'}:
         raise RuntimeError('Unknown operation')
     report=audit()
     require(not report['missingImages'],'Missing source images: '+','.join(report['missingImages']))

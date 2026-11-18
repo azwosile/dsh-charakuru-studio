@@ -18,12 +18,63 @@ window.__ModuleLoader__.load({
     var NS = 'charakuru-studio-ui';
     var PANEL_ID = 'charakuru-studio';
     var SIDEBAR_ORDER = 20;
-    var TABS = ['pipeline', 'assets', 'editor', 'models', 'tripo', 'blender', 'credentials'];
+    var TABS = ['pipeline', 'materials', 'assets', 'editor', 'models', 'tripo', 'blender', 'credentials'];
+    var CLIENT_VERSION = '__STUDIO_PACKAGE_VERSION__';
     var TIMEOUT_FAST = 15000;
     var TIMEOUT_SLOW = 300000;
 
     var dict = {
       en: {
+        materials: "External materials",
+        intakeKicker: "MATERIAL INTAKE / PROJECT LOCAL",
+        materialWorkflow: "Choose a step and register its inputs. Registration, adoption and execution are separate.",
+        materialDesktop: "DSH Desktop · local files",
+        materialWeb: "Local Web · file upload",
+        materialStage: "Material step",
+        materialRole: "Material role",
+        materialRegister: "Register external material",
+        materialInbox: "Materials at this step",
+        materialDrop: "Drop one external file here",
+        materialChooseFile: "Choose a file",
+        materialLocalPath: "Import from a local path",
+        materialPathLabel: "Absolute path on this computer",
+        materialCopyOnly: "A fingerprinted copy stays in this project. Source files and review state do not change on import.",
+        materialInvalid: "Wrong type, empty file or size over limit. Expected:",
+        materialSingle: "Choose a single file. Change the role or slot before importing another one.",
+        materialEmpty: "No materials registered here",
+        materialEmptyHint: "Upload a file or enter a local path. Preview and adoption become available after it is registered.",
+        materialRegistered: "Registered · not adopted",
+        materialDuplicate: "Already registered for this role. No new version was created.",
+        materialInUse: "In use",
+        materialInRevision: "Used in an editor revision",
+        materialAwaitingEdit: "Registered · not applied in Blender",
+        materialReferenceOnly: "Preview material · not a deliverable",
+        materialAdopt: "Adopt for this step",
+        materialAdopted: "Input adopted. Review checkpoints are still separate.",
+        materialOverlay: "Use as overlay",
+        materialOverlayReady: "Editor overlay prepared. Open a revision to see it.",
+        materialToEditor: "Open in Blender editor",
+        materialPreview: "Preview locally",
+        materialReview: "Material preview",
+        materialClosePreview: "Close preview",
+        materialExternalVrm: "External VRM · not a project export",
+        materialMotion: "VRMA to play",
+        materialNoMotion: "No external motion",
+        materialPlayReference: "Use for motion preview",
+        materialMotionChosen: "Motion selected for the preview. It has not changed the model.",
+        materialMotionNeedsVrm: "Select a VRM 1.0 model to play this motion, or open an exported VRM revision in the editor.",
+        materialNoProject: "Choose and initialize a project before importing files.",
+        materialUpgradeRequired: "This Host has no stage material endpoints. Load the 0.5.0 Host and verify the workbench port.",
+        materialSelected: "Registered editor input",
+        materialTarget: "Mesh object with UVs",
+        materialTextureSlot: "Material slot (0-based)",
+        materialExecute: "Create revision from this material",
+        materialNoSelection: "Choose a registered Blend, GLB or texture",
+        materialExecHint: "Blend opens a separate revision; mesh appends; texture changes the explicit material slot only. Inspect the result before continuing.",
+        materialNeedBase: "Open a Blender scene before applying this file.",
+        materialTrustBlend: "Only open a trusted, packed Blend. This saves a separate revision but does not make an untrusted Blender file safe. Continue?",
+        materialInclude: "Import at this step",
+        pickProjectFolder: "Choose project folder",
         nativeLabel: 'DSH / NATIVE WORKBENCH',
         workflowTitle: 'From illustration to avatar',
         workflowIntro: 'Use each step below in order. Opening a step never advances its checkpoint.',
@@ -87,6 +138,7 @@ window.__ModuleLoader__.load({
         timeout: 'The Studio API did not answer in time.', copied: 'Instructions copied — paste them into the composer.',
         noSession: 'No conversation is open; open a session to insert instructions.', idle: 'Ready.',
         activeStage: 'Active stage', progress: 'Progress',
+        hostVersionMismatch: 'Host version does not match this workbench. Check the local port, then load the project again.',
         settingsHint: 'The Studio API is the loopback host this plugin starts on the machine running DeepSeek Harness. Change the port only when you moved it.',
         pipeline: 'Project & reviews', models: 'Models & views', tripo: 'Tripo budget', blender: 'Blender', credentials: 'Credentials',
         editor: '3D editor & production', sourceBlend: 'Source Blend path', editorOperation: 'Operation', editorParams: 'Structured operation parameters (JSON)', editorRun: 'Save as new revision', editorImport: 'Import existing Blend', editorUndo: 'Rollback to previous revision', vrmAddonPath: 'VRM add-on parent directory', aiPrompt: 'AI edit request', aiRequest: 'Record AI edit request', camera: 'Camera', overlay: 'Reference overlay', overlayOpacity: 'Overlay opacity', saveView: 'Save camera / overlay', collectEditor: 'Collect editor job',
@@ -118,6 +170,56 @@ window.__ModuleLoader__.load({
         balance: 'Full body', settings: 'Connection & project', instructions: 'Work in this character project. Read the bundled charakuru-vrm-studio skill and use companion catalog/audit/gate operations. Check the current stage, report actual artifacts and request review after the work. Never infer asset validation from process success.'
       },
       zh: {
+        materials: "外部素材",
+        intakeKicker: "MATERIAL INTAKE / 工程内素材",
+        materialWorkflow: "先选择工序，再登记相应文件。登记、采用与执行是三件事。",
+        materialDesktop: "DSH 桌面 · 本机文件",
+        materialWeb: "同机网页 · 文件上传",
+        materialStage: "素材所属工序",
+        materialRole: "素材用途",
+        materialRegister: "登记外部素材",
+        materialInbox: "这一工序的素材",
+        materialDrop: "拖放一个外部文件至此",
+        materialChooseFile: "选择文件",
+        materialLocalPath: "从本机路径导入",
+        materialPathLabel: "本机磁盘绝对路径",
+        materialCopyOnly: "素材指纹副本留在本工程。单纯导入不修改原文件或审批状态。",
+        materialInvalid: "类型不符、空文件或超过限制。需要：",
+        materialSingle: "一次登记一个文件。更改用途或槽位后再导入下一件。",
+        materialEmpty: "还没有登记素材",
+        materialEmptyHint: "选择文件、拖放或填写本机路径。登记后可预览，之后再决定是否采用。",
+        materialRegistered: "已登记 · 待采用",
+        materialDuplicate: "此用途已登记相同文件，未重复创建版本。",
+        materialInUse: "正在使用",
+        materialInRevision: "已有使用此素材的编辑修订",
+        materialAwaitingEdit: "已登记 · 未在 Blender 应用",
+        materialReferenceOnly: "预览素材 · 非交付产物",
+        materialAdopt: "采用为本步输入",
+        materialAdopted: "已采用输入。工序仍需独立审阅。",
+        materialOverlay: "设为参考叠图",
+        materialOverlayReady: "已准备参考叠图，打开编辑修订后可查看。",
+        materialToEditor: "带到 Blender 编辑器",
+        materialPreview: "本机预览",
+        materialReview: "外部素材预览",
+        materialClosePreview: "关闭预览",
+        materialExternalVrm: "外部 VRM · 非本项目导出",
+        materialMotion: "预览用 VRMA 动作",
+        materialNoMotion: "不播放外部动作",
+        materialPlayReference: "设为预览动作",
+        materialMotionChosen: "已选择预览动作，没有改动模型。",
+        materialMotionNeedsVrm: "先选一个 VRM 1.0，或在编辑器打开已导出 VRM 的修订，再播放此动作。",
+        materialNoProject: "请先选择工程目录并初始化，再登记素材。",
+        materialUpgradeRequired: "当前 Host 没有素材接口。请启用 0.5.0 并核对工作台连接端口。",
+        materialSelected: "已登记的编辑输入",
+        materialTarget: "有 UV 的网格对象",
+        materialTextureSlot: "材质槽（从 0 开始）",
+        materialExecute: "从此素材创建修订",
+        materialNoSelection: "选择已登记的 Blend、GLB 或贴图",
+        materialExecHint: "Blend 开新修订；GLB 追加对象；贴图仅修改指定材质槽。检查产物后再继续。",
+        materialNeedBase: "应用此素材前，请先打开一个 Blender 场景。",
+        materialTrustBlend: "请只打开可信且已打包依赖的 Blend。另存修订不等于能安全打开不可信文件。继续？",
+        materialInclude: "导入本步素材",
+        pickProjectFolder: "选择工程文件夹",
         nativeLabel: 'DSH 原生工作台',
         workflowTitle: '从原画到角色模型',
         workflowIntro: '依次准备每一步的产物。打开工序只是查看，不会推进关卡。',
@@ -181,6 +283,7 @@ window.__ModuleLoader__.load({
         timeout: 'Studio API 未在预期时间内响应。', copied: '指令已复制，请粘贴到输入框。',
         noSession: '当前没有打开的会话，请先打开一个会话再插入指令。', idle: '就绪。',
         activeStage: '当前阶段', progress: '进度',
+        hostVersionMismatch: 'Host 版本与当前工作台不匹配。请核对本机端口，再载入工程。',
         settingsHint: 'Studio API 由本插件在运行 DeepSeek Harness 的本机回环启动；只有改过端口时才需要修改。',
         pipeline: '工程与关卡', models: '模型与视图', tripo: 'Tripo 预算', blender: 'Blender', credentials: '密钥',
         editor: '三维编辑与生产', sourceBlend: '源 Blend 文件路径', editorOperation: '工序', editorParams: '结构化工序参数（JSON）', editorRun: '执行并保存新版本', editorImport: '导入已有 Blend', editorUndo: '回滚上一版本', vrmAddonPath: 'VRM 插件所在父目录', aiPrompt: 'AI 修改要求', aiRequest: '登记 AI 修改请求', camera: '相机方向', overlay: '参考图叠加', overlayOpacity: '叠加透明度', saveView: '保存视角与叠图', collectEditor: '收集编辑作业',
@@ -288,6 +391,15 @@ window.__ModuleLoader__.load({
       '.ck-asset-focus{display:block;width:100%;max-height:62vh;object-fit:contain;background:#18212c;border-radius:8px}',
       '.ck-empty{display:flex;flex-direction:column;gap:10px;align-items:flex-start;justify-content:center;padding:20px 0}',
       '@container (max-width:680px){.ck-body{grid-template-columns:1fr;gap:12px;padding-bottom:0}.ck-rail{flex-direction:row;overflow-x:auto;gap:4px;padding:0 0 8px;border-right:0;border-bottom:1px solid var(--dsw-alias-border-l1)}.ck-tab{width:auto;white-space:nowrap}.ck-rail-foot{margin:0;padding:0}.ck-content{padding-right:0}}',
+      '.ck-page[data-shell="desktop"] .ck-head{padding-top:calc(15px + var(--dsh-frame-top-clearance,0px))}',
+      '.ck-material-workspace{display:grid;gap:14px;min-width:0;--ck-mb:var(--dsw-alias-border-l2,GrayText);--ck-mtext:var(--dsw-alias-label-primary,CanvasText);--ck-mmuted:var(--dsw-alias-label-secondary,GrayText);--ck-maccent:var(--dsw-alias-brand-primary,Highlight);--ck-mbg:var(--dsw-alias-bg-layer-2,Canvas);color:var(--ck-mtext)}',
+      '.ck-intake-title{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:18px 20px;border:1px solid var(--ck-mb);border-radius:13px;background:linear-gradient(112deg,color-mix(in srgb,var(--ck-maccent) 9%,var(--ck-mbg)),var(--ck-mbg) 67%)}.ck-intake-title h2{font-size:clamp(21px,4cqw,30px);line-height:1.2;margin:5px 0}.ck-intake-title p{margin:5px 0 0;color:var(--ck-mmuted)}',
+      '.ck-material-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.ck-material-steps button{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:7px;min-width:0;min-height:43px;padding:6px 8px;text-align:left;color:inherit;background:var(--dsw-alias-bg-layer-1,Canvas);border:1px solid var(--ck-mb);border-radius:9px;font:inherit;cursor:pointer}.ck-material-steps button[aria-pressed=true]{border-color:var(--ck-maccent);background:color-mix(in srgb,var(--ck-maccent) 10%,var(--ck-mbg))}.ck-material-steps strong{font-size:12px;overflow-wrap:anywhere}.ck-material-steps small{font-variant-numeric:tabular-nums;color:var(--ck-mmuted)}',
+      '.ck-intake-grid{display:grid;grid-template-columns:minmax(230px,.9fr) minmax(0,1.2fr);gap:12px;align-items:start}.ck-intake-grid>.ck-card{min-width:0}.ck-material-help{margin:0;line-height:1.6;overflow-wrap:anywhere}',
+      '.ck-intake-drop{display:grid;justify-items:start;gap:5px;padding:14px;border:1px dashed var(--ck-mb);border-radius:9px;background:var(--ck-mbg);transition:border-color .14s,background .14s;min-width:0}.ck-intake-drop p{margin:0;color:var(--ck-mmuted);font-size:12px;font-variant-numeric:tabular-nums}.ck-intake-drop[data-dragging=true]{border-color:var(--ck-maccent);background:color-mix(in srgb,var(--ck-maccent) 12%,var(--ck-mbg))}.ck-intake-drop[data-disabled=true]{opacity:.64}.ck-intake-drop input{min-width:0;max-width:100%;font:inherit;color:inherit}.ck-intake-drop input::file-selector-button{font:inherit;padding:7px 9px;border-radius:7px;margin-inline-end:7px;background:Canvas;color:CanvasText;border:1px solid var(--ck-mb);cursor:pointer}.ck-material-file-label{color:var(--ck-mmuted);font-size:12px}',
+      '.ck-inline-details summary{cursor:pointer;color:var(--ck-mmuted);padding:4px 0}.ck-inline-details>.ck-btn{margin-top:6px}.ck-material-list{display:grid;gap:7px;list-style:none;margin:0;padding:0;max-height:400px;overflow:auto}.ck-material-row{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 8px;padding:8px;border:1px solid var(--ck-mb);border-radius:8px;min-width:0}.ck-file-chip{font:700 10px/1.3 ui-monospace,Consolas,monospace;padding:5px;border-radius:6px;color:var(--ck-maccent);background:var(--ck-mbg);align-self:start}.ck-material-info{min-width:0}.ck-material-info strong,.ck-material-info p{overflow-wrap:anywhere}.ck-material-info p{margin:1px 0 4px;font-size:11px;color:var(--ck-mmuted)}.ck-material-actions{grid-column:2;display:flex;gap:5px;flex-wrap:wrap}.ck-material-empty{border:1px dashed var(--ck-mb);border-radius:8px;padding:14px;color:var(--ck-mmuted)}.ck-material-empty p{margin:3px 0 0}',
+      '@container (max-width:820px){.ck-intake-grid{grid-template-columns:1fr}}@container (max-width:480px){.ck-material-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.ck-intake-title{padding:12px}.ck-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}.ck-material-actions{grid-column:1/-1}.ck-stage-actions{width:100%;justify-content:flex-start;padding-inline-start:4px}}',
+      '.ck-error-detail{width:100%;color:var(--dsw-alias-state-error-primary,#b53043);overflow-wrap:anywhere}',
       '@media (prefers-reduced-motion:reduce){.ck-btn,.ck-tab{transition:none}}'
     ].join('');
 
@@ -310,9 +422,15 @@ window.__ModuleLoader__.load({
      * @returns {object} form state.
      */
     function createForm(config) {
-      var activeProject='';try{activeProject=localStorage.getItem('avatar-studio-active-project')||'';}catch(_){}
+      var activeProject='', base='http://127.0.0.1:'+(config.port || 9886);
+      try {
+        activeProject=localStorage.getItem('avatar-studio-active-project') || '';
+        var saved=localStorage.getItem('avatar-studio-loopback');
+        if(saved)base=loopback(saved);
+      } catch (_) {}
       return {
-        base: 'http://127.0.0.1:' + (config.port || 9886),
+        base: base,
+        materialStage: '', materialRole: '', materialSlot: 'head_front', materialPart: 'head', materialPath: '', materialPreview: '', materialMotionId: '', editorMaterialId: '', materialTarget: '', materialTextureSlot: '0',
         imageRequestId: '', accountAlias: '', accountLimit: '0', accountChannel: 'tripo_studio', sourceBlend: '', editorOperation: 'audit', editorParams: '{}', vrmAddonPath: '', aiPrompt: '', editorCamera: 'front', overlayId: '', overlayOpacity: '0.35', selectedObject: '', playMotion: false, assetKind: 'image', slotId: 'source', sourcePath: '', previewId: '', projectDir: activeProject, prompt: '', source: '', allowance: '200',
         model: config.defaultImageModel || 'qwen-image-2.1-local',
         apiModel: '', variant: 'base', artist: '', unet: '', imageScope: 'head_front', referenceMode: 'project', compareAngle: 'front',
@@ -354,7 +472,13 @@ window.__ModuleLoader__.load({
         });
       }
 
-      function put(key, value) { if(key==='projectDir')try{localStorage.setItem('avatar-studio-active-project',value);}catch(_){} if(key==='imageRequestId')try{localStorage.setItem('avatar-studio-request:'+state.form.projectDir,value);}catch(_){} set({ form: Object.assign({}, state.form, { [key]: value }) }); }
+      function put(key, value) {
+        if(key==='projectDir')try{localStorage.setItem('avatar-studio-active-project',value);}catch(_){}
+        if(key==='imageRequestId')try{localStorage.setItem('avatar-studio-request:'+state.form.projectDir,value);}catch(_){}
+        var patch={form:Object.assign({},state.form,{[key]:value})};
+        if(key==='base' && value!==state.form.base) Object.assign(patch,{boot:null,loaded:false,notice:'',error:'',result:null});
+        set(patch);
+      }
 
       function verdictLabel(data) {
         if (!data) return '';
@@ -364,18 +488,18 @@ window.__ModuleLoader__.load({
         return t('done');
       }
 
-      async function request(route, body) {
+      async function request(route, body, file) {
         if (typeof fetch !== 'function') throw new Error('fetch is unavailable in this host');
         var controller = new AbortController();
         controllers.add(controller);
-        var slow = route.indexOf('/editor/run') >= 0 || route.indexOf('/editor/collect') >= 0 || route.indexOf('generate') >= 0 || route.indexOf('/blender/stage') >= 0;
+        var slow = file || route.indexOf('/materials/') >= 0 || route.indexOf('/editor/run') >= 0 || route.indexOf('/editor/collect') >= 0 || route.indexOf('generate') >= 0 || route.indexOf('/blender/stage') >= 0;
         var timer = setTimeout(function () { controller.abort(); }, slow ? TIMEOUT_SLOW : TIMEOUT_FAST);
         try {
           var res = await fetch(loopback(state.form.base) + route, {
-            method: body ? 'POST' : 'GET',
-            headers: body ? { 'Content-Type': 'application/json', 'X-Charakuru-Session': state.boot && state.boot.sessionToken || '' } : {},
-            body: body ? JSON.stringify(body) : undefined,
-            signal: controller.signal
+            method: body || file ? 'POST' : 'GET',
+            headers: body || file ? { 'Content-Type': file ? 'application/octet-stream' : 'application/json', 'X-Charakuru-Session': state.boot?.sessionToken || '' } : {},
+            body: file || (body ? JSON.stringify(body) : undefined),
+            signal: controller.signal, redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer'
           });
           var data = await res.json().catch(function () { return {}; });
           if (!res.ok || (data && data.error)) {
@@ -412,7 +536,13 @@ window.__ModuleLoader__.load({
 
       async function refresh(hydrate) {
         var dir = state.form.projectDir;
+        var base = loopback(state.form.base);
         var data = await request('/studio/bootstrap' + (dir ? '?projectDir=' + encodeURIComponent(dir) : ''));
+        if (data.version && data.version!==CLIENT_VERSION) {
+          set({boot:null,loaded:false,result:null});
+          throw new Error(t('hostVersionMismatch')+' Host '+data.version+' / UI '+CLIENT_VERSION);
+        }
+        if (data.version===CLIENT_VERSION) try { localStorage.setItem('avatar-studio-loopback',base); } catch (_) {}
         set({ boot: data, loaded: true });
         if (hydrate) hydrateForm(data);
         return data;
@@ -425,7 +555,7 @@ window.__ModuleLoader__.load({
           .then(task)
           .then(function (data) {
             var patch = { pending: false, busy: false };
-            if (data) { patch.result = data; patch.notice = verdictLabel(data); }
+            if (data) { patch.result = Object.fromEntries(Object.entries(data).filter(function(e){return e[0]!=='sessionToken';})); patch.notice = verdictLabel(data); }
             set(patch);
             return data;
           })
@@ -636,6 +766,8 @@ function GeometryPreview(props) {
 }
 
     /* PREVIEW_END */
+    /* MATERIALS_START */
+    /* MATERIALS_END */
     function makePanel(ctx, registered) {
       return function StudioWorkbench(props) {
         var studio = (props && props.studio) || registered;
@@ -737,8 +869,9 @@ function GeometryPreview(props) {
           var stageId = (activeStage && projectState.activeStageId) || '[STAGE]';
           var def = stages.find(function(s){return s.id === stageId;});
           var advice = def && (def['handoff' + lang] || def['summary' + lang]);
+          var materialNote = boot?.materialRoles ? (lang === 'Zh' ? '外部素材先用 charakuru_project 的 list_materials 读取当前工序的已登记条目；编辑时只用明确允许的 materialId，不凭文件名猜权限。' : 'Read registered inputs with charakuru_project (list_materials) for this step. Use only an explicitly authorized materialId for an edit.') : '';
           var constraint = lang === 'Zh' ? '禁止未授权上传、扣费或改变审批。先报告真实文件和限制，等待人工处理下一步。' : 'Do not upload, charge, or approve on the user’s behalf. Report actual artifacts and stop at the checkpoint.';
-          return [t('instructions'), '', 'Project: ' + project, 'Stage: ' + stageId + ' (' + stageName(stageId) + ')', advice || '', constraint].filter(Boolean).join('\n');
+          return [t('instructions'), '', 'Project: ' + project, 'Stage: ' + stageId + ' (' + stageName(stageId) + ')', advice || '', materialNote, constraint].filter(Boolean).join('\n');
         }
 
         function insert() {
@@ -759,6 +892,9 @@ function GeometryPreview(props) {
           if (stage.id === '2_views') { studio.put('assetKind', 'image'); studio.put('slotId', 'head_front'); }
           selectTab(stage.nextTab || 'assets');
         };
+        function openIntake(stageId) {
+          studio.put('materialStage',stageId || '');studio.put('materialRole','');selectTab('materials');
+        }
         var pipeline = [
           h('div', { className: 'ck-flow-heading', key: 'flow' },
             h('div', null, h('div',{className:'ck-eyebrow'},t('nativeLabel')), h('h2', null, t('workflowTitle')), h('p', null, t('workflowIntro'))),
@@ -769,7 +905,7 @@ function GeometryPreview(props) {
             h('div', { className: 'ck-row' }, button('init', function () {
               studio.action('/studio/project/init', { characterPrompt: form.prompt, sourceImage: form.source,
                 monthlyCreditAllowance: Number(form.allowance), preferredImageModel: form.model }, true);
-            }, false, 'primary'), projectState ? button('assets',function(){openStage({id:'1_concept',nextTab:'assets'});}) : null))) :
+            }, !boot, 'primary'), projectState ? button('assets',function(){openStage({id:'1_concept',nextTab:'assets'});}) : null))) :
             details('projectSetup', false, field('prompt','prompt','textarea'), h('div',{className:'ck-grid'},field('source','source'),field('allowance','allowance','number')),
               button('init',function(){studio.action('/studio/project/init',{characterPrompt:form.prompt,sourceImage:form.source,monthlyCreditAllowance:Number(form.allowance),preferredImageModel:form.model},true); })),
           projectState ? card(null, h(React.Fragment, null,
@@ -786,6 +922,7 @@ function GeometryPreview(props) {
                   h('p', null, stage['summary' + lang] || ''),
                   stage['artifact' + lang] ? h('p',{className:'ck-stage-artifact'},t('stageArtifact') + ' · ' + stage['artifact' + lang]) : null),
                 h('div',{className:'ck-stage-actions'},h('span', { className: 'ck-pill', 'data-status': record.status || 'pending' }, t(record.status || 'pending')),
+                  boot?.materialRoles ? button('materialInclude',function(){openIntake(stage.id);},false,current?'default':'ghost') : null,
                   button(current?'openStep':'viewStep',function(){openStage(stage);},false,current?'primary':'ghost')));
             })))) : null,
           projectState ? card('checkpointTitle', h(React.Fragment, null,
@@ -980,15 +1117,8 @@ function GeometryPreview(props) {
             h('div',{className:'ck-view-grid'},viewDefs.filter(function(v){return v.group!=='balance'&&v.angle===form.compareAngle;}).map(chosenViewTile)),
             h('p',{className:'ck-muted'},t('balanceReview')),
             h('div',{className:'ck-view-grid'},viewDefs.filter(function(v){return v.group==='balance';}).map(chosenViewTile)))) : null,
-          h('p', {className:'ck-muted'}, '原画与 11 个视图槽分别登记。GLB 几何预览不等于纹理、骨骼或 VRM 验收。'),
-          h('div', {className:'ck-grid'}, select('assetKind','assetKind',[['image','PNG'],['glb','GLB']]),
-            form.assetKind === 'image' ? select('slotId','slotId', [['source',t('sourceSlot')]].concat(((boot && boot.requiredViewSlots) || []).map(function(v){return [v.id,v.labelZh || v.id];}))) : select('part','part',[['head',t('head')],['body',t('body')],['accessory',t('accessory')]]), field('sourcePath','sourcePath')),
-          h('div', {className:'ck-row'}, button('importAsset',function(){studio.action('/studio/assets/import',{kind:form.assetKind,slotId:form.slotId,part:form.part,sourcePath:form.sourcePath,expectedRevision:projectState.stateRevision},true);}, !projectState),
+          h('div',{className:'ck-row'},button('materialInclude',function(){openIntake(projectState?.activeStageId);},!projectState,'primary'),
             button('scanViews',function(){studio.action('/studio/assets/scan',{},true);},!projectState)),
-          h('label',{className:'ck-field'},h('span',null,'或选择文件上传（≤20 MiB；大型 GLB 使用路径导入）'),h('input',{type:'file',accept:form.assetKind==='image'?'.png':'.glb',disabled:busy||!projectState,onChange:function(event){
-            var file=event.target.files[0];if(!file)return;
-            studio.act(async function(){if(file.size>20*1024*1024)throw new Error('文件大于20 MiB，请用本地路径导入');var b64=await new Promise(function(resolve,reject){var reader=new FileReader();reader.onerror=reject;reader.onload=function(){resolve(String(reader.result).split(',')[1]);};reader.readAsDataURL(file);});var result=await studio.request('/studio/assets/import',{projectDir:form.projectDir,kind:form.assetKind,slotId:form.slotId,part:form.part,dataBase64:b64,label:file.name,expectedRevision:projectState.stateRevision});if(result.asset&&result.asset.slotId==='source')studio.syncOriginal(result);await studio.refresh(false);return result;});event.target.value='';
-          }})),
           chosenPreview ? (chosenPreview.kind === 'glb' ? h(GeometryPreview,{key:chosenPreview.id,url:assetUrl(chosenPreview)})
             : h('img',{className:'ck-asset-focus',src:assetUrl(chosenPreview),alt:chosenPreview.label,referrerPolicy:'no-referrer'})) : null,
           h('div',{className:'ck-grid'}, assetItems.slice().reverse().map(function(asset){
@@ -998,15 +1128,28 @@ function GeometryPreview(props) {
             return h('section',{className:'ck-card',key:asset.id},h('strong',null,(asset.slotId==='source'?t('sourceSlot'):asset.slotId||asset.part)+' · '+(selected?'已采用':'候选')),
               asset.kind==='image'?h('button',{type:'button',className:'ck-btn',onClick:function(){studio.put('previewId',asset.id);}},h('img',{src:assetUrl(asset),alt:asset.label,loading:'lazy',referrerPolicy:'no-referrer',style:{width:'100%',height:180,objectFit:'contain',background:'#18212c',borderRadius:6}})):h('button',{className:'ck-btn',onClick:function(){studio.put('previewId',asset.id);}},'预览 GLB 几何'),
               h('p',{className:'ck-muted'},asset.label+' · '+Math.round(asset.bytes/1024)+' KiB · '+asset.sha256.slice(0,12)),
-              button('selectAsset',function(){studio.action('/studio/assets/select',{assetId:asset.id,expectedRevision:projectState.stateRevision},true);},selected||asset.kind==='glb'&&!asset.renderable));
+              asset.slotId === 'overlay' ? button('materialOverlay', function(){studio.put('overlayId',asset.id);selectTab('editor');}) : button('selectAsset',function(){studio.action('/studio/assets/select',{assetId:asset.id,expectedRevision:projectState.stateRevision},true);},selected||asset.kind==='glb'&&!asset.renderable));
           }))
         ];
         var editorState=projectState&&projectState.editor;
         var blenderCheckpoint=projectState&&projectState.blenderState&&projectState.blenderState.activeBlendFile;
         var editRevision=editorState&&editorState.revisions.find(function(r){return r.id===editorState.activeRevisionId;});
+        var projectMaterials=projectState?.materials?.items || [];
+        var editMaterial=projectMaterials.find(function(m){return m.id===form.editorMaterialId && MATERIAL_EDITOR_OPS[m.intent];});
+        var previewMotion=projectMaterials.find(function(m){return m.id===form.materialMotionId && m.intent==='motion';});
+        var textureMeshes=(editRevision?.audit?.objects || []).filter(function(o){return o.type==='MESH' && !o.helper;});
+        var textureTarget=form.materialTarget || form.selectedObject;
         var overlayAsset=assetItems.find(function(a){return a.id===form.overlayId;});
         function editorUrl(kind){return loopback(form.base)+'/studio/editor/content?projectDir='+encodeURIComponent(form.projectDir||boot.activeProjectDir)+'&revisionId='+editRevision.id+'&kind='+kind+'&access='+encodeURIComponent(boot.sessionToken||'');}
         function editorRun(operation){studio.act(async function(){var params=operation==='import_checkpoint'?{}:JSON.parse(form.editorParams||'{}');if(operation==='import_blend')params.sourceBlend=form.sourceBlend;if(form.vrmAddonPath)params.vrmAddonPath=form.vrmAddonPath;if(form.selectedObject&&!params.objects&&operation==='transform')params.objects=[form.selectedObject];var result=await studio.request('/studio/editor/run',{projectDir:form.projectDir,operation:operation,params:params,expectedRevisionId:editorState&&editorState.activeRevisionId||null});await studio.refresh(false);return result;});}
+        function applyRegisteredMaterial() {
+          if (!editMaterial) return;
+          if (editMaterial.intent==='scene' && !window.confirm(t('materialTrustBlend'))) return;
+          var params={materialId:editMaterial.id};
+          if (editMaterial.intent==='texture') {params.objects=[textureTarget];params.textureSlot=Number(form.materialTextureSlot);}
+          if (form.vrmAddonPath) params.vrmAddonPath=form.vrmAddonPath;
+          studio.action('/studio/editor/run',{operation:MATERIAL_EDITOR_OPS[editMaterial.intent],params:params,expectedRevisionId:editRevision?.id || null},true);
+        }
         var requestStatus = {requested:'aiRequested',ready_for_review:'aiReady',approved:'aiApproved',rejected:'aiRejected'};
         var aiHistory = ((editorState && editorState.requests) || []).slice(-8).reverse().map(function(item) {
           var canReview = !!editRevision && item.status==='ready_for_review' && item.resultRevisionId===editRevision.id;
@@ -1025,12 +1168,21 @@ function GeometryPreview(props) {
         var editorTab=[
           h('div',{className:'ck-row',key:'prep'},button('prepBlender',function(){selectTab('blender');})),
           h('p',{className:'ck-muted'},'可读取已有 Blend，也可接力本工程通过伴随插件生成的 Blender 检查点。源文件只读，所有工序另存不可变版本；结构检查不代替视觉审批。'),
+          boot?.materialRoles ? card('materialSelected',h(React.Fragment,null,
+            h('p',{className:'ck-muted'},t('materialExecHint')),
+            select('editorMaterialId','materialSelected',[['',t('materialNoSelection')]].concat(projectMaterials.filter(function(m){return MATERIAL_EDITOR_OPS[m.intent];}).map(function(m){return [m.id,m.fileName+' · '+stageName(m.stageId)];}))),
+            editMaterial?.intent==='texture' ? h('div',{className:'ck-grid'},select('materialTarget','materialTarget',[['',t('materialTarget')]].concat(textureMeshes.map(function(o){return [o.name,o.name];}))),field('materialTextureSlot','materialTextureSlot','number')) : null,
+            editMaterial && editMaterial.intent!=='scene' && !editRevision ? h('p',{className:'ck-muted'},t('materialNeedBase')) : null,
+            h('div',{className:'ck-row'},button('materialInclude',function(){openIntake('4_assembly');},!projectState),
+              button('materialExecute',applyRegisteredMaterial,!editMaterial || !!editorState?.pendingJob || editMaterial.intent!=='scene'&&!editRevision || editMaterial.intent==='texture'&&(!textureMeshes.some(function(o){return o.name===textureTarget;})||form.materialTextureSlot===''||!Number.isInteger(Number(form.materialTextureSlot))||Number(form.materialTextureSlot)<0||Number(form.materialTextureSlot)>127),'primary')))) : null,
           h('div',{className:'ck-grid'},field('sourceBlend','sourceBlend'),field('vrmAddonPath','vrmAddonPath')),
           h('div',{className:'ck-row'},button('editorImport',function(){editorRun('import_blend');},!form.sourceBlend||!form.projectDir||!!(editorState&&editorState.pendingJob)),button('checkpointImport',function(){editorRun('import_checkpoint');},!blenderCheckpoint||!!(editorState&&editorState.pendingJob)),button('collectEditor',function(){studio.action('/studio/editor/collect',{},true);},!editorState||!editorState.pendingJob),button('取消编辑作业',function(){studio.action('/studio/editor/cancel',{},true);},!editorState||!editorState.pendingJob)),
           editRevision?h(React.Fragment,null,
             h('div',{className:'ck-grid'},select('editorCamera','camera',[['front','+Z / 正面'],['back','−Z / 背面'],['left','−X / 左面'],['right','+X / 右面'],['perspective','透视']]),select('overlayId','overlay',[['','不叠加']].concat(assetItems.filter(function(a){return a.kind==='image';}).map(function(a){return [a.id,a.label||a.slotId];}))),field('overlayOpacity','overlayOpacity','number')),
             h('div',{className:'ck-row'},button('saveView',function(){studio.action('/studio/editor/view',{camera:form.editorCamera,overlayAssetId:form.overlayId||null,overlayOpacity:Number(form.overlayOpacity)},true);}),h('label',null,h('input',{type:'checkbox',checked:!!form.playMotion,onChange:function(e){studio.put('playMotion',e.target.checked);}}),'VRM 步行动作探针')),
-            h(GeometryPreview,{key:editRevision.id,url:editorUrl(editRevision.artifacts.vrm?'vrm':'preview'),camera:form.editorCamera,overlayUrl:overlayAsset?assetUrl(overlayAsset):null,opacity:Number(form.overlayOpacity),playMotion:form.playMotion,onSelect:function(name){studio.put('selectedObject',name);}}),
+            projectMaterials.some(function(m){return m.intent==='motion';}) ? select('materialMotionId','materialMotion',[['',t('materialNoMotion')]].concat(projectMaterials.filter(function(m){return m.intent==='motion';}).map(function(m){return [m.id,m.fileName+' · '+stageName(m.stageId)+' · '+m.sha256.slice(0,8)];}))) : null,
+            previewMotion && !editRevision.artifacts.vrm ? h('p',{className:'ck-callout'},t('materialMotionNeedsVrm')) : null,
+            h(GeometryPreview,{key:editRevision.id,lang:lang,url:editorUrl(editRevision.artifacts.vrm?'vrm':'preview'),camera:form.editorCamera,overlayUrl:overlayAsset?assetUrl(overlayAsset):null,opacity:Number(form.overlayOpacity),playMotion:form.playMotion,motionUrl:previewMotion && editRevision.artifacts.vrm ? studioMaterialUrl(form,boot,previewMotion) : null,onSelect:function(name){studio.put('selectedObject',name);}}),
             h('p',{className:'ck-muted'},'当前版本 '+editRevision.id.slice(0,8)+' · 已选对象 '+(form.selectedObject||'无')+' · '+editRevision.operation),
             select('editorOperation','editorOperation',['audit','head_scale','transform','materials','transfer_weights','normalize_weights','configure_vrm','spring_setup','pose_check','export_vrm'].map(function(op){return [op,op];})),field('editorParams','editorParams','textarea'),
             h('div',{className:'ck-row'},button('editorRun',function(){editorRun(form.editorOperation);},!!editorState.pendingJob),button('editorUndo',function(){studio.action('/studio/editor/rollback',{revisionId:editRevision.parentId,expectedRevisionId:editRevision.id},true);},!editRevision.parentId||!!editorState.pendingJob)),
@@ -1042,7 +1194,7 @@ function GeometryPreview(props) {
             details('result',false,h('pre',{className:'ck-pre'},JSON.stringify({gates:editRevision.audit.gates,notes:editRevision.audit.notes,revisions:editorState.revisions.map(function(r){return {id:r.id,operation:r.operation,parentId:r.parentId};})},null,2)))
           ):null
         ];
-        var bodies = { editor: editorTab, assets: assetTab, pipeline: pipeline, models: modelsTab, tripo: tripoTab, blender: blenderTab, credentials: credentialsTab };
+        var bodies = { materials: h(MaterialWorkspace,{studio:studio,state:state,projectState:projectState,stages:stages,lang:lang,selectTab:selectTab,card:card}), editor: editorTab, assets: assetTab, pipeline: pipeline, models: modelsTab, tripo: tripoTab, blender: blenderTab, credentials: credentialsTab };
         var statusChip = busy ? h('span', { className: 'ck-chip', 'data-tone': 'brand' }, t('busy'))
           : state.error ? h('span', { className: 'ck-chip', 'data-tone': 'error', role: 'alert' }, state.error)
             : state.notice ? h('span', { className: 'ck-chip', 'data-tone': 'ok', role: 'status' }, state.notice)
@@ -1059,6 +1211,7 @@ function GeometryPreview(props) {
         var strip = h('div', { className: 'ck-strip' },
           h('span', { className: 'ck-chip' }, form.base.replace(/^https?:\/\//, '')),
           boot ? h('span', { className: 'ck-chip' }, boot.activeProjectDir || '—') : null,
+          boot?.version ? h('span',{className:'ck-chip'},'v'+boot.version) : null,
           activeStage ? h('span', { className: 'ck-chip', 'data-tone': 'brand' }, t('activeStage') + ': ' + stageName(projectState.activeStageId)) : null,
           statusChip);
 
@@ -1075,7 +1228,12 @@ function GeometryPreview(props) {
         var settingsDrawer = details('settings', !boot,
           h('div', { className: 'ck-grid' }, field('base', 'backend'), field('projectDir', 'project')),
           h('p', { className: 'ck-muted' }, t('settingsHint')),
-          button('openProject',function(){studio.action('/studio/project/open',{},true);}),
+          h('div',{className:'ck-row'},desktopHasFolderPicker() ? button('pickProjectFolder',function(){studio.act(async function(){
+            var folder = await window.__DSH_DIRECTORY_PICKER__.pick();
+            if (typeof folder !== 'string' || !folder) return null;
+            studio.put('projectDir',folder);studio.put('materialPath','');studio.put('editorMaterialId','');
+            return studio.refresh(true);
+          });},false,'primary') : null,button('openProject',function(){studio.action('/studio/project/open',{},true);})),
           h('div',{className:'ck-row'},((boot && boot.recentProjects)||[]).map(function(p){return h('button',{className:'ck-btn',key:p.projectDir,onClick:function(){studio.put('projectDir',p.projectDir);studio.act(function(){return studio.refresh(true);});}},p.projectName||p.projectDir);})));
 
         var resultDrawer = details('result', false,
@@ -1095,11 +1253,11 @@ function GeometryPreview(props) {
 
         var content = h('div', {
           className: 'ck-content', id: uid + '-panel', role: 'tabpanel', 'aria-labelledby': tabId(state.tab), tabIndex: 0
-        }, settingsDrawer, waiting, failure, showBody ? bodies[state.tab] || null : null, resultDrawer);
+        }, settingsDrawer, waiting, failure, boot && state.error ? h('p',{className:'ck-error-detail',role:'alert'},state.error) : null, showBody ? bodies[state.tab] || null : null, resultDrawer);
 
         var body = h('div', { className: 'ck-body' }, rail, content);
 
-        return h('div', { className: 'ck-page', 'data-studio-panel': PANEL_ID },
+        return h('div', { className: 'ck-page', 'data-studio-panel': PANEL_ID, 'data-shell': isDshDesktop() ? 'desktop' : 'web' },
           h('style', null, css),
           h('header', { className: 'ck-head' }, heading, toolbar),
           strip,
