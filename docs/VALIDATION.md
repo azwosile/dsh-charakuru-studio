@@ -1,4 +1,6 @@
-# 0.1.0 验证记录
+# 0.1.0 验证记录（历史）
+
+> 当前版本与验收边界见 [0.3.x 发布记录](RELEASE-0.3.0.md)。下文的旧安装副本同步方法仅为历史诊断，不是当前安装指南；desktop 请使用官方 Electron 插件管理器。
 
 验证日期：2026-11-16。目标运行时：DeepSeek Harness 0.2.2-rc.3，Node 22+，Windows。
 
@@ -42,7 +44,7 @@
 
 ### 运行时验证（2026-11-17）
 
-- 桌面 profile 的 `node_modules\dsh-charakuru-studio` 是安装副本（非链接），已从本仓库镜像同步，原件备份在 `C:\Users\Kurami_Utaho\.dsh\plugin-backups\dsh-charakuru-studio-20261117-001205`。
+- 桌面 profile 的 `node_modules\dsh-charakuru-studio` 是安装副本（非链接），已从本仓库镜像同步，原件备份在 `%USERPROFILE%\.dsh\plugin-backups\<historical-backup>`。
 - 客户端 bundle 由宿主按 `/plugins/??<pkg>/client.js&rev=<12位>` 提供，`rev` = `framedHash('plugin-artifact',[mtimeMs,ctimeMs,size])`；`dsh-client-hmr` 每 500ms 轮询该三元组并热替换条目（实测：改文件后 rev 由旧值变为 `8cb522dc4567`）。
 - 实测 `GET /plugins/??dsh-charakuru-studio/client.js&rev=8cb522dc4567` 返回 200，正文含 `sidebar.panellist`、不含 `showModal` 与 `conversation.session.header.utilities`，与本仓库 `lib/client.js` 一致（末尾仅有 sourceMappingURL 尾注）。故运行中的实例已在提供新版客户端；浏览器若仍显示旧入口，刷新一次页面即可。
 

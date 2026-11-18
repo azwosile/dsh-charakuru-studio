@@ -16,3 +16,11 @@ coverage/
 *.env
 .env.*
 dsh-charakuru.local.json
+# Private verification and generated output
+/releases/
+/research/
+.runtime/
+*.blend
+*.blend1
+*.vrm
+*.glb

@@ -1,7 +1,7 @@
 {
   "name": "dsh-charakuru-studio",
-  "version": "0.1.0",
-  "description": "Standalone 2D-to-VRM 3D avatar studio plugin for DeepSeek Harness with AA image model hub (Qwen-Image-2.1, ComfyUI Anima, NovelAI V5), Tripo Studio free-quota scheduler, and dsh-blender-plugin linkage.",
+  "version": "0.3.1",
+  "description": "Avatar Studio: independent local-first DSH avatar workbench with immutable Blender revisions, offline Three.js/VRM preview and conservative manual budget ledger. Experimental release; cloud adapters unverified and disabled by default.",
   "license": "MIT",
   "author": {
     "name": "azwosile",
@@ -44,12 +44,17 @@
     "LICENSE",
     "scripts/check.mjs",
     "tests/*.test.mjs",
-    "tests/fixtures.mjs"
+    "tests/fixtures.mjs",
+    "scripts/build-client.mjs",
+    "src",
+    "scripts/*.mjs",
+    "NOTICE"
   ],
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "selftest": "node --test tests/*.test.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "build:client": "node scripts/build-client.mjs"
   },
   "dsh": {
     "bundle": {
@@ -95,5 +100,10 @@
     "anima",
     "qwen-image",
     "novelai"
-  ]
+  ],
+  "devDependencies": {
+    "three": "0.187.0",
+    "esbuild": "0.28.2",
+    "@pixiv/three-vrm": "3.5.5"
+  }
 }

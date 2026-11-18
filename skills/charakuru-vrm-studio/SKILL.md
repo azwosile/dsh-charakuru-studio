@@ -16,7 +16,7 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 5. `5_rig_spring`：启发式骨架权重与裙摆骨架草案；人工配置弹簧、碰撞体和服装权重。
 6. `6_expressions_vrm`：表情草稿、元数据与导出尝试；检查位移、预设绑定、动作及查看器表现。
 
-完成当前阶段后用 `charakuru_project(action="checkpoint", checkpointAction="request_review", ...)` 提交证据。Agent 工具支持提交审阅和恢复编辑；用户在会话顶栏「Charakuru 工作台」批准或要求修改。逐关推进，禁止将脚本执行成功替代人工验收。
+完成当前阶段后用 `charakuru_project(action="checkpoint", checkpointAction="request_review", ...)` 提交证据。Agent 工具支持提交审阅和恢复编辑；用户在侧栏「Charakuru 工作台」批准或要求修改。逐关推进，禁止将脚本执行成功替代人工验收。
 
 ## 生图
 
@@ -53,3 +53,25 @@ description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视
 阶段 2–5 返回 `degraded`，等待独立检查。回执必须包含真实结构化结果及产物；进程 `ok` 不证明资产通过。长任务提升为 job 后用 `blender_rt_job` 收集，当前插件不自动提交 job 产物到检查点。
 
 拓扑编辑前保存回退点。用伴随 audit、asm、gate、visualreport 和动作检查形成证据；自交、漂移、腿裙间隙需真实网格或动作判据，禁止构造与几何无关的标量寻优。VRM 容器含扩展仅证明格式，外部查看器和运动质量单独验收。
+
+## 0.2.0 资产与协议约束
+
+- `charakuru_project(action="import_asset", assetKind="image", slotId="head_front", sourcePath=..., projectDir=...)` 登记真实 PNG；`action="scan_views"` 扫描离线 11 槽位生成结果。GLB 用 assetKind="glb" 与 part。
+- 导入/归档不等于选择 GLB；请用户在资产库预览并采用头/身候选。所有图像与候选由文件 SHA-256 绑定审阅，变更后必须重新审批。
+- 0.2.0 仅开放前三阶段证据审批，后续启发式工序不允许标记为完整交付。
+- 执行前核对参考图适配能力，不把参考图丢弃后改成文生图。Qwen 在线/Anima 内置工作流不支持本适配器的参考条件；改为离线编辑后导入。
+- `charakuru_blender_avatar(action="probe")` 探测实际协议，不从端口猜版本；多桥接冲突须先处理。
+- 3.1 GUI 执行传入已 attach/grant 的 Blender `sessionId`；DSH Host/agent/session 身份由 execution 上下文取得，禁止虚构。
+- 新队列提交后返回 jobId，使用 `charakuru_blender_avatar(action="collect_job", projectDir=...)` 收集真实产物。不要重复 run_stage。未完成、失败或身份不符时保留工程状态，按伴随工具诊断，不声称任务已成功。
+- 本地 HTTP session token 不是人类身份认证；Agent 不得借 HTTP 绕过“请用户审阅”的流程。
+
+
+## 0.3.0 显式编辑路线
+
+显示品牌 Avatar Studio，包/工具 ID 保持兼容。默认禁止云端执行；本地服务未连接时不要自行改用云端。生图 `requestId` 必须在重试时保持不变；新 ID 是新任务。手工账户账本不能代替供应商报价或防止外部消费。
+
+现有有权使用的 Blend 优先用 `charakuru_blender_avatar(action="editor_operation", editorOperation="import_blend", editorParams={sourceBlend,vrmAddonPath}, projectDir=...)`，不要让 legacy 高斯权重工序覆盖现有 rig。后续传入明确 expectedRevisionId。
+
+支持 audit/head_scale/transform/materials/transfer_weights/normalize_weights/configure_vrm/spring_setup/pose_check/export_vrm。参数与限制见 docs/OPERATIONS.md。AI 请求登记不等于执行；输出通过仅表示结构，视觉审阅始终 required。collect/cancel 使用 editor_collect/editor_cancel；取消请求不是终态。3.1 编辑队列尚未实机验收。
+
+素材、Blend/VRM、截图和本机账户信息不得提交公开仓库。私测导出中的作者占位不是可发布授权声明。完整 P2～P5 未全验收，按 docs/RELEASE-0.3.0.md 如实报告缺口。

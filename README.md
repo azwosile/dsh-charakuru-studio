@@ -1,79 +1,51 @@
-# dsh-charakuru-studio
+# Avatar Studio for DSH
 
-面向 DeepSeek Harness 的独立角色制作工作台：整理角色设定、编译 11 张拆件视图提示词、调用生图接口、规划 Tripo Studio 预算、归档 GLB，并通过 [dsh-blender-plugin](https://github.com/sixtysevenlf/dsh-blender-plugin) 生成或运行 Blender 脚本。
+独立、本地优先的角色制作工作台。**0.3.1 是实验发布，不是 P2～P5 全量验收完成版。** 原 npm 包名 `dsh-charakuru-studio`、工具 ID 和工程文件名保留，避免破坏升级；显示品牌为 Avatar Studio。项目与 Charakuru、DSH、Tripo 没有官方隶属或背书关系。
 
-**0.1.0 是实验版。** 项目管理、提示词编译、工作流导出、文件校验与本地 HTTP 接口可独立使用。Blender 比例、权重、裙摆骨架和表情生成属于启发式草稿，需人工修整和验收。裙摆脚本目前生成骨架草案，SpringBone joints、碰撞体和服装权重仍需配置；插件没有承诺一键得到可步行成品。
+## 已提供的工作流
 
-## 安装与入口
+- 11 槽参考图库、PNG/GLB 文件校验、明确头体选择、最近工程与哈希绑定审批。
+- 离线打包的 Three.js / three-vrm 视图：材质、纹理、蒙皮、正侧背相机、参考叠图、对象选择。外部模型资源 URL 被阻止，请嵌入 GLB。
+- 现有 Blend 独立导入路线：通过 companion 另存不可变版本，头/发联动缩放、对象变换、回滚；不会覆盖源 Blend。
+- AI 修改请求记录工程版本、对象、相机与输入哈希。**这是待处理请求，不是自动完成的 AI 编辑**；Agent 使用结构化工具执行后仍需审阅。
+- 显式材质检查、同项目源网格权重转移、权重归一化、humanoid 映射、SpringBone/胶囊碰撞/裙骨分支、VRM 导出。错误定位至对象/顶点，结构通过不代表成品质量。
+- 跨工程账户账本：手工报价、限额、保留/提交/未知/结算/取消状态；Studio/API 分账。**它没有自动查询供应商余额，也未与全部执行路径联动，不能约束外部网页消费。**
 
-测试目标为 **DSH 0.2.2-rc.3 / Node 22+**。通过 DSH 的 **插件 → 添加插件** 选择本地目录或发布包；也可让 Agent 调用：
+## 安装与运行
 
-```json
-{"action":"install_bundle","target":"[插件目录或安装包路径]"}
-```
+使用 DSH **Electron 应用的「插件 → 添加插件」**，输入 `dsh-charakuru-studio-0.3.1.tgz` 的本地完整路径，安装并立即启用。桌面 profile 不支持用 CLI 安装；不要手改 profile 依赖绕过。
 
-启用后，左侧栏会出现 **Charakuru 工作台**（英文为 **Charakuru Studio**）一行；点击即在主区域打开整页工作台（不是弹窗），工作台包含「工程与关卡」「模型与视图」「Tripo 预算」「Blender」「密钥」五个标签页。标题栏的「返回会话」按钮回到对话。默认工作台 API 为 `http://127.0.0.1:9886`，伴随插件为 `http://127.0.0.1:9877`。修改端口后在面板「连接与工程」同步地址。
+目标环境：DSH 0.2.2-rc.3 / Node 22+。本机实测 companion 3.0.6 + Blender 5.3.0；3.1 Gateway 适配只有协议测试，未在该机器验收。companion 未被升级。详见 [安装、升级与卸载](docs/INSTALL-WINDOWS.md)。
 
-## 最短使用流程
+打开侧栏 **Avatar Studio 工作台**，默认 API 为 `http://127.0.0.1:9886`。有七个标签：工程、资产、模型视图、Tripo、Blender、三维编辑、凭据。无需 CDN。
 
-1. 在「工程与关卡」填写工程目录、角色描述、参考 PNG 路径和账户实际月额度，创建工程。每个工程使用独立状态文件，关卡按顺序审阅。
-2. 在「模型与视图」选模型并编译提示词。导出 Qwen Diffusers 批处理脚本或 Anima ComfyUI API 工作流；已有服务和凭据时可点击「立即生图」。导出的 ComfyUI JSON 是 API prompt 格式，可通过 `/prompt` 提交。
-3. 检查头部四视图、T-pose 身体四视图和全身比例三视图。通过人工关卡后再投入重建。
-4. 在「Tripo 预算」生成手动操作计划。用户在已登录的 Studio 网页操作，下载 GLB 后登记真实积分与远端任务 ID，点击「校验并归档 GLB」。
-5. 在「Blender」先生成脚本检查输入，再通过伴随插件运行。所有执行阶段均要求 VRM Add-on 先加载。检查点保存在工程内；启发式步骤返回 `degraded`。
-6. 使用伴随插件的 catalog、audit、assembly、gate 与多角度视口检查，人工修整权重、弹簧和表情，再决定关卡通过。VRM 文件校验只证明 GLB 2 容器及 VRM 1 扩展存在，外部查看器兼容性和动作效果需另测。
+### 最短零云额度路线
 
-## 模型与接口
+1. 建立独立工程目录，导入自己有权使用的 PNG / GLB；不要提交私有素材到公开仓库。
+2. 在「三维编辑与生产」选择已有 `.blend`，配置官方 VRM Add-on 所在父目录（如需要），点击导入。
+3. 选择 `head_scale`，参数 `{"factor":0.95,"armature":"你的骨架","headBone":"head","pivotBone":"neck"}`。成功后刷新为新版本；回滚切换版本指针，不删除历史。
+4. 保存相机、参考叠图；重载工程核对版本、输入对象和参考图。
+5. 按 [工序与故障指南](docs/OPERATIONS.md) 显式处理权重与 VRM。每步检查审计和外观；不要把动作探针当穿模验收。
 
-| 驱动 | 使用方式 | 参考图情况 |
-| --- | --- | --- |
-| 本地 Qwen-Image-2.1 | 导出 Diffusers 脚本，或请求本地 OpenAI 兼容生图服务 | 参考编辑使用导出脚本；兼容生图端点为文生图 |
-| 本地 ComfyUI Anima | 基础 / aesthetic / turbo API 工作流 | 内置模板为文生图；aesthetic 需指定 UNet 文件 |
-| NovelAI | 图片 API / ZIP 返回解析 | Precise Reference 请求限定 V4.5；V5 按实际模型 ID 使用 |
-| OpenAI 兼容网关 | GPT Image、Seedream、FLUX 等候选 | 内置请求为文生图；网关协议需匹配 |
-| Gemini | generateContent 内联图像 | 支持参考 PNG |
+## 生图与额度边界
 
-AA 榜单是 **2026-11-16 的静态快照**，附来源链接和模型提示词建议。显示名、价格、排名及候选 API ID 均应与供应商核对。云端执行强制填写实际 `apiModelOverride`。真实云端请求、计费和所有本地模型版本尚未逐个实测。
+`allowCloudExecution` 默认 `false`。本地驱动只允许 HTTP loopback 地址；该限制不能保证你配置的本地代理不会转发到云端。先确认服务确实在本地运行。
 
-Qwen 与 Anima 权重各有许可条件，MIT 覆盖本插件原创代码；模型权重、生成服务与输出的条件分别适用。
+Qwen / Anima 本机默认端口本轮不可达，因此没有真实生图样例。NovelAI、OpenAI-compatible、Gemini、Tripo 云端均没有调用，**没有消耗云额度**。接口适配和工作流导出属于实验能力，不公开宣称生产驱动已通过验收。
 
-## Tripo 额度与归档
-
-默认 `200` 月积分、`95 / 145` 消耗是可编辑的**规划假设**，请按账户页面输入实际值。计划不提交远端任务、不自动点击网页，也不约束其他浏览器会话的并发。Studio 与 OpenAPI 余额分开。
-
-归档验证 GLB 2 头、长度和 JSON chunk，计算 SHA-256 后写入工程。远端任务 ID 用于幂等记账；相同 ID 的内容或消耗冲突会报错。无任务 ID 时按部件和内容摘要去重。它不代表网格语义或拓扑通过验收。
-
-## 工具与配置
-
-提供六个 Agent 工具：`charakuru_aa_models`、`charakuru_project`、`charakuru_generate_views`、`charakuru_tripo_quota`、`charakuru_blender_avatar`、`charakuru_credentials`，以及 `charakuru-vrm-studio` 技能。Agent 可提交审阅，批准与要求修改在工作台完成。凭据工具只读状态；密钥在面板密码框或环境变量配置，避免进入对话参数。
-
-| 配置 | 默认值 | 用途 |
-| --- | --- | --- |
-| `port` | `9886` | 本地工作台 API |
-| `autoStart` | `true` | 启用时启动 API |
-| `blenderPluginUrl` | `http://127.0.0.1:9877` | 伴随插件 |
-| `comfyuiUrl` | `http://127.0.0.1:8188` | ComfyUI |
-| `qwenImageUrl` | `http://127.0.0.1:8000` | Qwen 兼容服务 |
-| `openaiCompatBaseUrl` | `https://api.openai.com/v1` | 兼容网关 |
-| `defaultImageModel` | `qwen-image-2.1-local` | 默认模型 |
-| `tripoMonthlyFreeCredits` | `200` | 初始规划额度，可设为 0 |
-
-云端执行会向所选供应商发送角色提示词及支持的参考图，并可能计费。密钥保存在 DSH Host 凭据库，或读取 `NOVELAI_API_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`TRIPO_API_KEY` 环境变量。删除 Host 记录仍保留环境变量回退。停用插件会移除工具、工作台入口和本地 API；工程文件与凭据记录继续保留。
+UI 中生图任务有显式 request ID；重试请保留同一 ID。已开始或计费不明的任务拒绝重新提交；收到结果的相同请求返回已有回执。换 ID 是新任务，必须先核对旧任务。服务重试、供应商退款、生产 429/余额/跨进程云并发还未认证。不要因本地测试通过而启用无人值守付费生成。
 
 ## 开发与验证
 
 ```bash
+npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+npm run build:client
 npm test
 npm run check
-npm pack --ignore-scripts
 ```
 
-`check` 使用 `DSH_CHECK_PYTHON`、`DSH_PYTHON_EXECUTABLE` 或 PATH 中的 Python，检查生成的 5 个 Blender 脚本及两种 Qwen 脚本。Host 与 Client 直接分发 JavaScript，无额外前端构建步骤。
+编辑 `src/client-shell.js` 与 `lib/client-preview.js` 后重新 build；`lib/client.js` 是生成文件。运行时依赖离线内嵌；Three.js、three-vrm 许可证见 [NOTICE](NOTICE)。VRM Add-on、Blender 和 DSH 单独安装，不随包分发。
 
-测试包括真实 loopback HTTP、状态锁与版本冲突、人工关卡、幂等记账、PNG / ZIP / GLB 损坏输入、接口超时、密钥隔离及 Blender 回执。网络驱动与成功导出路径使用测试夹具，不构成真实模型或角色效果证明。同一进程内的锁保护输出；请避免多个 DSH 进程同时修改同一工程。
+[发布与验收矩阵](docs/RELEASE-0.3.0.md) · [工序指南](docs/OPERATIONS.md) · [安装升级卸载](docs/INSTALL-WINDOWS.md) · [LICENSE](LICENSE)
 
-验证记录见 [VALIDATION.md](docs/VALIDATION.md)。工作台的实际亮暗主题、窄屏与键盘操作仍需在已连接 DSH 页面验收。
-
-## 独立实现与许可
-
-MIT。仓库未包含 Charakuru 源码、技能原文、捐赠素材或模型权重；采用独立状态模型、接口与脚本实现。与 nanocle/Charakuru 无隶属或背书关系。仓库远端配置不代表已经发布；提交和推送由维护者执行。
+MIT 仅覆盖本仓库原创代码及相应许可组件；不授予模型权重、服务、输入角色或输出资产的使用权。不包含受限 Kit、第三方 donor 模型、用户角色、密钥或账户配置。

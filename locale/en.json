@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Charakuru character studio",
-    "description": "Open the Charakuru workbench from the left sidebar to manage a character project, compile 11 view prompts, export Qwen/Anima workflows or call configured image APIs, plan Tripo Studio budgets, archive GLBs and run Blender draft scripts through dsh-blender-plugin. Experimental 0.1: budgets are editable assumptions, Studio web actions are manual, and rigs, skirts and expressions require editing and review. Cloud requests send prompts and supported reference PNGs and may incur charges. Enter keys in the panel or environment. Disabling preserves projects and credentials.",
+    "title": "Avatar Studio",
+    "description": "Independent local-first avatar workbench. Experimental 0.3.1: immutable Blender revisions, offline Three.js/VRM preview, explicit weight/spring tools and manual account ledger. Cloud execution disabled by default. Visual acceptance is required.",
     "detail": "docs/DETAIL.md"
   }
 }

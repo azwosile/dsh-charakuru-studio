@@ -1,0 +1,11 @@
+import fs from 'node:fs/promises';
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+const root = new URL('../',import.meta.url);
+const bundled=await build({entryPoints:[fileURLToPath(new URL('src/viewport-entry.js',root))],bundle:true,write:false,format:'iife',globalName:'StudioThree',minify:true,legalComments:'inline',target:'es2022'});
+const preview=await fs.readFile(new URL('lib/client-preview.js',root),'utf8');
+let shell=await fs.readFile(new URL('src/client-shell.js',root),'utf8');
+shell=shell.replace("    var React = require('react');",()=>bundled.outputFiles[0].text+"\n    var React = require('react');");
+shell=shell.replace(/\/\* PREVIEW_START \*\/[\s\S]*?\/\* PREVIEW_END \*\//,()=>'/* PREVIEW_START */\n'+preview+'\n    /* PREVIEW_END */');
+await fs.writeFile(new URL('lib/client.js',root),shell);
+console.log('Built offline Three.js / VRM viewport into the lazy DSH client factory');

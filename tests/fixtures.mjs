@@ -28,3 +28,22 @@ export function glb(extra = {}) {
   let json = Buffer.from(JSON.stringify({ asset: { version: '2.0' }, ...extra })); json = Buffer.concat([json, Buffer.alloc((4-json.length%4)%4, 32)]);
   const header = Buffer.alloc(20); header.writeUInt32LE(0x46546c67); header.writeUInt32LE(2,4); header.writeUInt32LE(20+json.length,8); header.writeUInt32LE(json.length,12); header.writeUInt32LE(0x4e4f534a,16); return Buffer.concat([header,json]);
 }
+export function triangleGlb() {
+  const data = Buffer.alloc(36); [-1,-1,0,1,-1,0,0,1,0].forEach((v,i) => data.writeFloatLE(v,i*4));
+  const base = glb({ buffers:[{byteLength:36}], bufferViews:[{buffer:0,byteOffset:0,byteLength:36}], accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[-1,-1,0],max:[1,1,0]}], meshes:[{primitives:[{attributes:{POSITION:0}}]}], nodes:[{mesh:0}], scenes:[{nodes:[0]}], scene:0 });
+  const chunk = Buffer.alloc(8); chunk.writeUInt32LE(data.length); chunk.writeUInt32LE(0x004e4942,4);
+  const all = Buffer.concat([base,chunk,data]); all.writeUInt32LE(all.length,8); return all;
+}
+
+export async function readyAssetProject(dir) {
+  const { initOrUpdateProject, transitionStageCheckpoint } = await import('../lib/project/state.js');
+  const { importStudioAsset, selectStudioAsset } = await import('../lib/project/assets.js');
+  const { REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
+  await initOrUpdateProject(dir);
+  async function approve() { await transitionStageCheckpoint(dir,{action:'request_review'});await transitionStageCheckpoint(dir,{action:'approve',actor:'user'}); }
+  await approve();
+  for (const slot of REQUIRED_VIEW_SLOTS) await importStudioAsset({projectDir:dir,slotId:slot.id,dataBase64:png().toString('base64')});
+  await approve();
+  for (const part of ['head','body']) { const a=await importStudioAsset({projectDir:dir,kind:'glb',part,dataBase64:triangleGlb().toString('base64')});await selectStudioAsset({projectDir:dir,assetId:a.asset.id}); }
+  await approve();
+}

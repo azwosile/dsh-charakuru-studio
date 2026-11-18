@@ -185,12 +185,13 @@ function createHarness() {
 
 let cachedSource = null;
 
-async function loadClient() {
+async function loadClient(storage = new Map()) {
   if (cachedSource === null) cachedSource = await fs.readFile(CLIENT_FILE, 'utf8');
   let spec = null;
   const fetchCalls = [];
   const sandbox = {
     window: { __ModuleLoader__: { load(value) { spec = value; } } },
+    localStorage: {getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     console,
     URL,
     AbortController,
@@ -214,8 +215,8 @@ async function loadClient() {
 }
 
 /** Apply the plugin against a fake context and materialize its slot entries. */
-async function mount({ config = {}, services = {} } = {}) {
-  const loaded = await loadClient();
+async function mount({ config = {}, services = {}, storage } = {}) {
+  const loaded = await loadClient(storage);
   const harness = createHarness();
   for (const [name, value] of Object.entries(services)) harness.services.set(name, value);
   loaded.moduleExports.apply(harness.ctx, config);
@@ -248,7 +249,7 @@ test('the entry point is a sidebar row plus a main page, not a header modal', as
   assert.equal(mounted.sidebar.options.order, 20);
   assert.equal(mounted.sidebar.options.locale, NS);
   assert.equal(typeof mounted.sidebar.options.label, 'function');
-  assert.equal(mounted.sidebar.options.label(), 'Charakuru Studio');
+  assert.equal(mounted.sidebar.options.label(), 'Avatar Studio');
 
   assert.equal(mounted.main.options.key, PANEL_ID);
   assert.equal(mounted.main.options.locale, NS);
@@ -303,8 +304,8 @@ test('the page renders a workbench shell with a tab rail and no dialog chrome', 
 
   // 5 tabs, exactly one selected, all pointing at the same panel region.
   const tabs = byRole(tree, 'tab');
-  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false]);
-  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1]);
+  assert.deepEqual(tabs.map((tab) => tab.props['aria-selected']), [true, false, false, false, false, false, false]);
+  assert.deepEqual(tabs.map((tab) => tab.props.tabIndex), [0, -1, -1, -1, -1, -1, -1]);
   assert.equal(textOf(tabs[0]).includes('Project & reviews'), true);
   const rail = byRole(tree, 'tablist')[0];
   assert.equal(rail.props['aria-orientation'], 'vertical');
@@ -351,19 +352,19 @@ test('tabs switch, keep state across remounts and follow the active language', a
   });
 
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
   assert.equal(hostNodes(tree).some((node) => String(node.props.id || '').endsWith('-f-model')), true, 'model picker is on screen');
   assert.equal(studio.getSnapshot().tab, 'models');
 
   // A fresh mount reuses the same store: the workbench does not reset on navigation.
   tree = mounted.runtime.render(Panel, mounted.face);
-  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, true, false, false, false]);
+  assert.deepEqual(byRole(tree, 'tab').map((tab) => tab.props['aria-selected']), [false, false, false, true, false, false, false]);
 
   // Language switch: labels resolve through the locale service on both surfaces.
   mounted.harness.setLanguage('zh');
   tree = mounted.runtime.render(Panel, mounted.face);
   assert.equal(textOf(hostNodes(tree).find((node) => node.type === 'h1')).trim(), '角色立绘 → VRM 工作台');
-  assert.equal(mounted.sidebar.options.label(), 'Charakuru 工作台');
+  assert.equal(mounted.sidebar.options.label(), 'Avatar Studio 工作台');
   assert.equal(textOf(hostNodes(tree)[0]).includes('工作台'), true);
 
   // Keyboard navigation walks the rail and wraps. Each key press needs a fresh
@@ -549,4 +550,12 @@ test('disposal stops in-flight requests and unregisters the seats', async () => 
   // back to its key — what matters is that the call settles instead of hanging.
   await assert.rejects(() => pending, /timeout|did not answer in time/);
   assert.equal(studio.getSnapshot().pending, false);
+});
+test('active project identity persists across a fresh client instance', async()=>{
+  const storage=new Map([['avatar-studio-active-project','D:/Fixture project']]);
+  const first=await mount({storage});const tree=first.runtime.render(first.main.component,first.face);
+  const input=hostNodes(tree).find(n=>n.type==='input'&&n.props.value==='D:/Fixture project');assert.ok(input);
+  input.props.onChange({target:{value:'D:/Second project'}});assert.equal(storage.get('avatar-studio-active-project'),'D:/Second project');
+  const second=await mount({storage});const again=second.runtime.render(second.main.component,second.face);
+  assert.ok(hostNodes(again).some(n=>n.type==='input'&&n.props.value==='D:/Second project'));
 });

@@ -1,16 +1,43 @@
-# Windows 一键安装
+# Windows / Electron：安装、升级、回退、卸载
 
-使用 `Install-Charakuru-Studio.cmd`。插件 0.1.0 安装包已内嵌在脚本内，无需另放 tgz 文件。
+版本：Avatar Studio 0.3.1（实验）。包名保持 `dsh-charakuru-studio`。目标 DSH 0.2.2-rc.3 / Node 22+。
 
-1. 完全退出 DeepSeek Harness，包括托盘中的进程。
-2. 双击安装器。默认识别本机桌面版安装位置；其他位置会弹出程序选择窗口，请选择 `DeepSeek Harness.exe`。
-3. 等待官方 Desktop CLI 完成 `plugin --profile desktop add <本地包>`。安装器保留现有插件与配置，包括 dsh-purge，不自动批准依赖脚本。
-4. 重新打开 DSH，在“插件”页确认 Charakuru Studio 的状态。命令成功表示包管理步骤完成，实际入口仍以重新打开后的页面为准。
+## 安装与升级
 
-内嵌包解码后保存在 `%LOCALAPPDATA%\CharakuruStudio\installers\0.1.0\<包指纹前缀>`，同目录保留安装日志。出现错误时，窗口显示日志路径与官方 CLI 输出，不自动删除其他插件或更改其脚本批准设置。
+1. 备份自己的工程目录、已用旧包和 `%USERPROFILE%/.dsh/profiles/desktop` 中已有配置/锁文件。备份可能包含敏感信息，只在本机保留。
+2. 打开官方 DSH Electron 应用，侧栏「插件 → 添加插件」。输入本地 `dsh-charakuru-studio-0.3.1.tgz` 的完整路径。
+3. 点击「安装」，核对包名与版本，点击「立即启用」。不要批准无关插件安装脚本。
+4. 进入 **Avatar Studio 工作台**，核对七标签、连接状态、工程版本；`/health` 应报告 0.3.1。
+5. 必要时用应用菜单重启。不要同时运行两个监听同一工作台端口的实例。
 
-可从命令行执行 `Install-Charakuru-Studio.cmd /check`：只校验内嵌包，不解包、不安装、不操作 DSH 配置。本轮已执行此检查，通过 SHA-256 校验；实际安装按用户要求暂停。
+**desktop profile 由 Electron 独占管理。** CLI 会拒绝该 profile；不要给 EXE 追加 `plugin` 命令，不要手工修改 profile 的 package.json/锁文件绕过。0.2.1 起允许真实 `dsh-app://app` 来源；0.2.0 的工作台连接问题已修复。
 
-此前插件管理器的一次安装返回 `ERR_PNPM_IGNORED_BUILDS`，待处理列表包含 dsh-purge。这只记录该次操作结果，不代表 dsh-purge 必然阻断其他安装方式；本轮保留它。今后 CLI 如再次报告依赖脚本待处理，请保留日志，在 DSH 插件管理界面查看具体原因。
+仓库代码变更不会自动更新通过 tgz 安装的插件。安装包内已有离线前端，不需 npm install / CDN / 模型下载。
 
-本版本为实验版：云端生图接口与完整 VRM 成功导出路径尚待实际环境验收，Tripo Studio 使用手动计划与下载归档。详见验证记录。
+## Blender / VRM Add-on
+
+companion 独立安装；本插件不会自动升级它。3.0.6 默认 9877，3.1 Gateway 默认 39877。检测到多个实例时显式选择，不要同时启用两个 agent bridge。
+
+官方 VRM Add-on 4.10.5 在 Blender 5.3.0 的项目级 headless 执行中实测；可在自己的私有工程 `.runtime` 中解压官方 legacy ZIP。三维编辑参数 `vrmAddonPath` 指向模块所在父目录，默认模块名 `VRM_Addon_for_Blender-release`。此路线只设置进程内 preferences，不保存全局用户设置。**不是已完成 GUI 全局安装的声明。** 更换 add-on 版本后重新验证。
+
+## 回退
+
+在 Electron 插件管理器停用本插件，再用「添加插件」安装保留的旧 tgz，启用并核对版本。不要用 CLI 操作 desktop。旧版未理解的新工程字段可能丢失；回退包时恢复安装前的工程副本，或另用新目录，避免让旧版改写新工程。
+
+## 卸载与数据保留
+
+在 Electron 插件管理器停用并移除本插件。工程目录、输出、手工账户账本与凭据不会自动删除。需要彻底清理时：
+
+- 先在面板「密钥」明确删除相应凭据；不要在聊天中粘贴密钥。
+- 备份后自行删除不再需要的工程。账本默认在 `%USERPROFILE%/.dsh/charakuru-studio/accounts`。
+- companion / VRM Add-on 独立管理，不随本插件卸载。
+
+本轮不会为了演示卸载而删除用户工程或凭据。安装回退/卸载指南不是全新用户全流程验收回执。
+
+## 连接故障
+
+- 9886 被占用：检查本插件实例；在插件配置与面板设置中使用同一新端口。
+- `Failed to fetch`：核对版本、工作台端口与来源；不要放开任意 CORS Origin。
+- GUI doctor 不通过：不能声称 GUI 连接正常；可独立检查 headless 能力和真实回执。
+- `Input changed` / `artifact changed`：保留证据，不手改 hash；重新导入或从未修改的版本恢复。
+- `in-flight / uncertain`：先核对供应商或 companion 任务，不要直接换 request ID 重试。

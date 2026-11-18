@@ -1,5 +1,6 @@
 export interface CharakuruStudioConfig {
   port?: number;
+  allowCloudExecution?: boolean;
   autoStart?: boolean;
   blenderPluginUrl?: string;
   comfyuiUrl?: string;

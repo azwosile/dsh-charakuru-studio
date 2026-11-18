@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Charakuru 角色制作工作台",
-    "description": "在左侧栏点击「Charakuru 工作台」打开整页工作台，创建角色工程、编译 11 视图提示词、导出 Qwen/Anima 工作流或调用所配生图接口；规划 Tripo Studio 预算并归档 GLB，通过 dsh-blender-plugin 运行 Blender 草稿脚本。0.1 实验版：额度为可编辑假设，Tripo 网页由用户操作，骨架、裙摆及表情需人工修整验收。云端请求会发送提示词及支持的参考 PNG，并可能计费；密钥在面板或环境变量配置。停用后保留工程和凭据。",
+    "title": "Avatar Studio 角色工作台",
+    "description": "独立、本地优先的角色工作台。0.3.1 实验版：不可变 Blender 编辑版本、离线 Three.js/VRM 预览、显式权重与弹簧工序、手工账户账本。云端默认禁用；脚本成功不等于视觉验收。保留原包名与工具 ID 以兼容已有工程。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

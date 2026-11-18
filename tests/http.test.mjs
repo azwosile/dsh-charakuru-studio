@@ -9,9 +9,10 @@ import { loadProjectState } from '../lib/project/state.js';
 
 test('actual loopback HTTP: isolated projects, user review and request boundaries', async t => {
   const dir = await tempProject(t), a = path.join(dir, 'a'), b = path.join(dir, 'b');
-  const srv = await startStudioHttpServer({ port: 0 });
+  const srv = await startStudioHttpServer({ port: 0, config: { registryFile: path.join(dir, 'recent.json') } });
   t.after(() => srv.close());
-  const post = (route, body, headers = {}) => fetch(srv.baseUrl + route, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  const { sessionToken } = await (await fetch(srv.baseUrl + '/studio/session')).json();
+  const post = (route, body, headers = {}) => fetch(srv.baseUrl + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Charakuru-Session': sessionToken, ...headers }, body: JSON.stringify(body) });
   const health = await (await fetch(srv.baseUrl + '/health')).json();
   assert.equal(health.plugin, 'dsh-charakuru-studio');
   assert.equal((await post('/studio/project/init', { projectDir: a, projectName: 'Alpha', monthlyCreditAllowance: 0 })).status, 200);

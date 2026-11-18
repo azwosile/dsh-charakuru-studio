@@ -44,9 +44,9 @@ test('router: validates bytes, preserves cloud key isolation and reports partial
   const state = (await loadProjectState(dir)).state;
   assert.equal(state.views.head_front.status, 'ready'); assert.equal(state.views.head_back.status, 'missing');
   assert.deepEqual(await fs.readFile(path.join(dir, 'views/head/head_front.png')), png());
-  await assert.rejects(runTurnaroundGeneration({ projectDir: dir, modelId: 'seedream-5.5', mode: 'execute', slots: ['head_front'] }), /explicit apiModelOverride/);
+  await assert.rejects(runTurnaroundGeneration({ projectDir: dir, modelId: 'seedream-5.5', mode: 'execute', slots: ['head_front'] }), /IMAGE_PREFLIGHT_BLOCKED/);
   await initOrUpdateProject(dir, { sourceImage: 'missing.png' });
-  await assert.rejects(runTurnaroundGeneration({ projectDir: dir, mode: 'execute', slots: ['head_front'] }), /ENOENT/);
+  await assert.rejects(runTurnaroundGeneration({ projectDir: dir, mode: 'execute', slots: ['head_front'] }), /IMAGE_PREFLIGHT_BLOCKED/);
 });
 
 test('router: timeout is a failed view and lock is released', async t => {
