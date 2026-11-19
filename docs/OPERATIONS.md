@@ -1,52 +1,93 @@
-# 结构化编辑工序与故障指南
+# 结构化编辑工序、双通道协同与故障指南（v0.7.0）
 
-所有操作通过 companion 打开输入文件，禁用 Blend 内脚本自动运行，另存 `editor/revisions/<id>/`。每个成功版本保存 Blend、GLB、审计和 SHA-256。源模型仍保持原路径原内容。关闭云端不影响这些工序。
+所有结构化编辑操作均通过 companion（`dsh-blender-plugin` 3.0.6 或 3.1 Gateway）在禁用 Blend 内置脚本自动运行的前提下打开输入文件，遵循 VRM-first 机制在 `open_mainfile` 前启用官方 VRM Add-on，并将新版本另存至 `editor/revisions/<id>/`。每个成功修订均保存 `scene.blend`、`preview.glb`、`audit.json`（及 `export_vrm` 时的 `avatar.vrm`）与全产物 SHA-256 指纹；用户原始外部 `.blend` 与历史修订保持 100% 只读。关闭云端执行（`allowCloudExecution=false`）不影响任何本机 Blender 编辑与渲染工序。
 
-建议先复制工程进行验证。程序会改变所选分支的网格/骨骼/材质；没有任何“自动获得成品”的承诺。
+---
 
-## 操作
+## 1. 完整 17 项结构化编辑工序（`editor_operation`）
 
-| operation | 关键参数 | 限制 |
+| 工序 (`operation`) | 关键参数 (`params`) | 适用路线与边界说明 |
 |---|---|---|
-| import_blend | sourceBlend, vrmAddonPath | 新工程也可导入；来源必须由用户明确选择 |
-| import_checkpoint | 可选 vrmAddonPath | 只接力本工程当前有效并已指纹登记的 Blender 检查点；草案仍须审阅 |
-| audit | 可选 armature | 结构和纹理检查，不是质量审批 |
-| head_scale | factor 0.75～1.25, armature, headBone, pivotBone | 对头骨与后代发骨的权重顶点/shape keys 联动，颈部过渡仍需检查 |
-| transform | objects, scale, translation | 只操作明确 mesh，不执行任意 Python |
-| materials | materialMode=preserve/pbr | preserve 检查已有图；pbr 为实验分支，按现有图像启发选择色图，需人工确认，不重建纹理 |
-| transfer_weights | sourceMesh, objects, maxTransferDistance | 显式同工程源网格；最近表面三角插值；不得用未经授权 donor |
-| normalize_weights | objects（可选） | 归一化已有 deform bone 权重；有未加权顶点即失败，不能凭空生成解剖权重 |
-| configure_vrm | humanBones, title, authors | 明确映射与归属；默认禁止再分发；私测占位作者不能用于发布 |
-| spring_setup | chains, colliderBones, 可选 skirt | 真实 SpringBone joints 和胶囊；已有配置拒绝叠加，先回滚 |
-| pose_check | armature | 当前为指定骨名有限值探针，不是穿模、步态或物理质量检测 |
-| export_vrm | armature | 权重/纹理门禁与 exporter 校验；输出存在不等于外部兼容通过 |
+| `import_blend` | `sourceBlend`, 可选 `vrmAddonPath` | 从用户明确选定的本机 `.blend` 创建起始不可变修订；保留原骨架与权重 |
+| `import_checkpoint` | 可选 `vrmAddonPath` | 接力本工程当前有效且已 SHA-256 指纹登记的 Blender 阶段检查点进入修订树 |
+| `import_material_scene` | `materialId`, 可选 `vrmAddonPath` | 从工程已登记的 `foundation_body`（素体路线需先采用）或 `assembly_scene` 创建起始修订 |
+| `append_material_mesh` | `materialId`, 可选 `vrmAddonPath` | 向当前修订追加已登记的 `tripo_clothing`、`tripo_hair`、`tripo_accessory` 或 `accessory_mesh`（素体路线需源自已采用素体） |
+| `apply_material_texture` | `materialId`, `objects`, 可选 `vrmAddonPath` | 将已登记的 `texture_sheet` PNG 绑定到指定网格材质的 Base Color 输入并打包贴图 |
+| `fit_foundation` | `bodyObject`, 可选 `armature`, `scale` `[x,y,z]`, `shapeValues` `[{key,value}]` | 路线 2（`base_mesh`）素体塑形：保留原拓扑、UV 与变形骨权重，执行有界缩放（`0.75..1.35`）与形态键调整（`0..1`） |
+| `append_foundation_head` | `materialId`, `objects`, `headBone`, 可选 `replaceHeadObjects`, `scale`, `translation`, `rotation` | 路线 2 异源头模接力：需先经 `editor_inspect` 校验已采用 `foundation_head` 供体清单，围绕供体中心执行有界缩放、平移与欧拉角旋转（`[-360..360]`）并绑定到目标 `headBone` |
+| `audit` | 可选 `armature`, `vrmAddonPath` | 扫描可见网格、顶点/形态键、骨架变形骨、缺失贴图、零权重顶点与 VRM SpringBone 状态（骨绑定刚性网格合法豁免蒙皮零权重阻断） |
+| `head_scale` | `factor` (`0.75..1.25`), 可选 `armature`, `headBone`, `pivotBone` | 对头骨及后代发骨关联顶点与形态键联动缩放；颈部接缝仍需视觉检查 |
+| `transform` | `objects`, 可选 `scale` `[x,y,z]`, `translation` `[x,y,z]`, `rotation` `[rx,ry,rz]` | 对显式指定的网格对象执行有界缩放（`0.05..20`）、平移（`-10..10` 米）与欧拉角旋转（`-360..360` 度），不执行任意 Python |
+| `materials` | `materialMode` (`preserve` / `pbr`) | `preserve` 校验并保留既有贴图；`pbr` 按现有图像启发式关联色图并打包，不凭空重建纹理 |
+| `transfer_weights` | `sourceMesh`, `objects`, `maxTransferDistance` (`0.005..2.0`) | 从同工程显式 `sourceMesh` 的求值变形表面（`evaluated_get`）通过 `BVHTree` 最近三角重心插值转移变形骨权重并自动绑定骨架父级 |
+| `normalize_weights` | 可选 `objects`, `armature` | 归一化已有变形骨权重；存在未加权顶点时明确报错指出 `Object:vertexIndex` |
+| `configure_vrm` | `humanBones`, `title`, `authors`, 可选权限字段 | 写入 VRM 1.0 Humanoid 骨骼映射与作者/许可元数据；默认禁止再分发 |
+| `spring_setup` | `chains`, `colliderBones`, `stiffness`, `drag`, `gravity`, `hitRadius`, 可选 `skirt` | 配置 VRM 1.0 SpringBone 链条、碰撞体胶囊与可选裙摆辅助骨链；已有弹簧配置需先回滚再重配 |
+| `pose_check` | 可选 `armature`, `angle` (`5..45`) | 对大腿与上臂骨执行有限值姿态探针并复位；用于辅助暴露绑定异常，不替代完整动作验收 |
+| `export_vrm` | 可选 `armature`, `vrmAddonPath` | 校验 `gates.weights` 与 `gates.textures` 通过后导出 VRM 1.0 `avatar.vrm`，校验 GLB 2 + `VRMC_vrm` 容器并自动同步 `state.vrmMetadata.exportedVrmPath` |
 
-示例（替换为自己工程真实对象名）：
+### 参数示例（请替换为当前修订通过 `editor_inspect` 查得的真实对象名）
 
 ```json
-{"sourceMesh":"Body","objects":["Outfit"],"maxTransferDistance":0.25}
+{
+  "operation": "transform",
+  "params": {
+    "objects": ["Tripo_Hair"],
+    "scale": [1.0, 1.0, 1.0],
+    "translation": [0.0, -0.02, 1.48],
+    "rotation": [0.0, 0.0, -90.0]
+  }
+}
 ```
 
-权重转移会覆盖目标的变形骨权重，但不改来源网格；距离超限指出对象、顶点。服装/裙摆结构必须逐件检查，不能认为所有角色都适用。
+```json
+{
+  "operation": "transfer_weights",
+  "params": {
+    "sourceMesh": "Yumeka_Body",
+    "objects": ["Tripo_Coat"],
+    "maxTransferDistance": 0.25
+  }
+}
+```
 
-`spring_setup` 的 `skirt` 参数包含 `mesh, rootBone, waistZ, hemZ, segments, rings`，坐标为骨架局部米、Z 轴向上。裙区域按 Z 范围筛选，混合服装可能误选非裙部位。该工序只在新版本移除所选 mesh 上的 CLOTH/SURFACE_DEFORM；穿模修正仍需人工。复杂服装、非 Z-up 骨架应先在 Blender 明确分件/对齐，不应直接套用示例。
+---
 
-## AI 请求与审批
+## 2. Blender 双通道混合架构（Plugin 契约层 × Agent Computer-Use GUI）
 
-选中对象和视角，填写要求后点击「准备 DSH 会话草稿」。请求绑定 `baseRevisionId`、Blend SHA-256、对象和相机；用户在 DSH 会话检查后再发送。没有打开会话时，请求会保存，之后可重新插入，无需复制路径或重复建单。
+`v0.7.0` 支持在同一工程的 `editor.revisions[]` 不可变修订树上混合接力两条 Blender 通道，可在工作台或通过 `charakuru_blender_avatar(action="set_channel_preference", channelPreference="auto" | "plugin" | "computer_use")` 切换偏好：
 
-Agent 调用 `charakuru_blender_avatar` 的 `editor_operation`，同时传入 `editRequestId` 和 `expectedRevisionId`。成功后生成新版本和待审阅结果，作业异步时先执行 `editor_collect`。返回工作台，点击「载入工程」，预览后接受修改或恢复上一个版本。旧版本和被拒绝的产物仍保留。请求不执行自由文本 Python，不自动发送会话，也不代替整套模型的成品验收。
+1. **通道 1：`dsh-blender-plugin` 契约层与结构化管线（`plugin`）**：
+   - 适合批量参数化操作（`fit_foundation`、`transform`、`transfer_weights`、`configure_vrm`、`export_vrm`）与离线 Eevee 渲染（`charakuru_render`）。
+   - 支持 `executionTarget: "headless"`（默认，不抢占桌面焦点）与 `"gui_act"`（当 `doctor.kind === "ok"` 时通过伴随插件 GUI `/act` 执行）。
+   - 支持 `charakuru_blender_avatar(action="probe", sceneQuery="...")` 调用 `/host/scene-items` 查询实时场景对象，并配合伴随插件 228-op 契约层、`blender_rt_txn` / `blender_session(action="txn")` 事务快照及 `blender_rt_see` / `blender_see` 多视角截图。
+2. **通道 2：Agent Computer-Use GUI 签出 / 签入协议（`computer_use`）**：
+   - 适合自由手工微调（Sculpt 笔刷消穿模、Weight Paint 逐顶点刷权重、复杂材质节点调试、第三方 Blender 扩展操作）。
+   - **`checkout_gui`**（`POST /studio/editor/gui-checkout`）：验证 `expectedRevisionId` 与基线 `.blend` SHA-256，创建工程级 `guiCheckout` 锁并将基线拷贝至隔离工作副本 `editor/working/<checkoutId>/scene.blend`。签出期间锁定其他并发 `editor_operation`，保护 `editor/revisions/` 与用户外部源文件绝对只读。
+   - **`checkin_gui`**（`POST /studio/editor/gui-checkin`）：在 Blender GUI 保存 `editor/working/<checkoutId>/scene.blend` 后调用；companion 自动打包全部贴图（`pack_all`）、导出 `preview.glb`（及 `exportVrm=true` 时的 `avatar.vrm`）、执行 `audit()` 并计算全套 SHA-256，生成新的不可变修订 `editor/revisions/<newId>/` 并释放 `guiCheckout` 锁。新修订立即可在工作台 3D 视口审阅或通过 `editor_rollback` 回滚。
+   - **`abort_gui`**（`POST /studio/editor/gui-abort`）：放弃并清理未签入的工作副本，释放 `guiCheckout` 锁，不影响任何既有修订。
 
-## 常见错误
+---
 
-- `Unweighted vertex: Object:index`：目标缺有效 deform weights；不是重复点归一化按钮就能修复。选择有权使用、结构对应的源网格，或在 Blender 手工权重。
-- `Required humanoid assignments missing`：补齐映射，不能靠重命名文件绕过。
-- `No add-on preferences`：使用支持当前 Blender 的官方 add-on；本插件项目级 enable 设置内存 preferences，不保存全局配置。
-- `Blender process failed`：查看该版本目录 `companion-receipt.json` 和 stdout/stderr；失败输出不会激活。
-- `Editor job is pending`：通过 collect 收集；取消仅是请求，必须收集终态才可新提交。3.1 队列实机未验收。
-- `Base revision changed`：刷新工程，明确新的编辑基线；不以旧 AI 请求覆盖新版本。
-- WebGL 不可用：更新图形环境；不能退回用“文件存在”代替预览。
+## 3. Tripo 双通道与同机 Web 全功能支持
 
-## 必做视觉清单
+1. **Tripo OpenAPI v3 通道（`POST /studio/tripo/openapi` / `charakuru_tripo_quota`）**：
+   - `openapi_balance`：实时查询独立 OpenAPI 余额（与网页 Studio 免费额度严格分账）。
+   - `openapi_submit` / `openapi_poll`：受 `allowCloudExecution`、用户报价确认、`expectedRevision` 与 `account-budget.js` 账本预留（`reserve` → `submit` → `settle` / `uncertain` / `cancel`）保护。内置参数陷阱拦截（后处理任务禁止设置 `export_orientation`；`generate_parts=true` 与 `texture`/`pbr`/`quad`/`smart_low_poly` 互斥；`multiview_to_model` 强制要求 `front` 及至少 2 张视图）。任务成功后立即流式下载归档，规避 5 分钟签名 URL 过期。
+2. **Tripo 浏览器多视角工单（`studio-handoff.js`）**：
+   - 路线 1 绑定 4 张已审视图；路线 2 `base_mesh` 支持绑定 **1–4 张**同部件多视角参考 PNG（`referenceMaterialIds`）。
+   - `confirm_quote` 直接返回 `inbox` 回收目录；同时支持 DSH Desktop 原生路径选取与同机 DSH Web 二进制流式上传（`POST /studio/tripo/studio/upload`）。
+3. **同机 Web 目录浏览与新建（`POST /studio/fs/browse` & `POST /studio/fs/mkdir`）**：
+   - 在无 Electron 原生目录选择器的同机浏览器（`http://127.0.0.1:*`、`http://localhost:*`、`http://[::1]:*`）中，支持直接在全局设置抽屉浏览本机工程目录并新建子目录。
 
-正/侧/背观察轮廓、纹理方向、颈部接缝、头发随动；检查裙摆权重、抬腿穿模、碰撞半径、头发尾巴弹簧；在独立 VRM 查看器中验证；不同服装结构分别验收。运行时的正弦动作探针只帮助暴露问题，不产生通过证书。
+---
+
+## 4. AI 协作请求、全 6 关审阅与常见故障排查
+
+- **只读审查与草稿绑定**：`editor_inspect` 支持传入 `editRequestId` 审查待办请求，也支持省略 `editRequestId` 直接只读审查当前活动修订。AI 编辑完成后生成 `ready_for_review` 修订，必须由用户在工作台对比预览后点击批准或退回。
+- **全 6 关审阅打通**：Stages 1–3 绑定原画、11 视图与 Tripo 候选 SHA-256；Stages 4–6 绑定活动编辑修订的装配审计、权重/SpringBone 证据与 `exportedVrmPath` VRM 1.0 产物，全 6 关均可通过 `request_review` 提交并由人工批准。
+- **常见错误与处理**：
+  - `An editor GUI working copy is already checked out`：当前存在未完结的 `checkout_gui` 工作副本；请先完成 `checkin_gui` 固化修订或调用 `abort_gui` 释放锁。
+  - `Do not set export_orientation when post-processing is planned` / `generate_parts=true is mutually exclusive...`：触发 Tripo OpenAPI v3 参数防呆保护，请移除冲突参数后再提交。
+  - `Unweighted vertex: Object:index`：目标网格存在无变形骨权重的蒙皮顶点；请对服装执行 `transfer_weights` 或切换至 `checkout_gui` 在 Blender Weight Paint 中手工补权（刚性配件建议使用 `parent_type='BONE'` 绑定）。
+  - `Editor job is pending`：先执行 `editor_collect` 收集终态；若伴随作业已变为 `killed`/`stale`/`unknown` 或校验失败，收集器会自动记录 `lastFailedJob` 并释放 `pendingJob` 锁。

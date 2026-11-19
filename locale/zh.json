@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio 角色工作台",
-    "description": "0.6.2 实验版：双路线的 AI 建模和本机渲染审阅，Tripo 官方浏览器接力，ComfyUI 文／图生图、逐模型参数与可编辑提示词。云端默认关闭。",
+    "description": "0.7.0 实验版：双路线 AI 建模与本机渲染审阅，Blender 双通道（插件契约 + Computer-Use GUI 签出/签入），Tripo OpenAPI v3 与多视角浏览器接力，浅/深双主题自适应工作台。云端默认关闭。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

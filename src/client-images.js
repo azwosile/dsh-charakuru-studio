@@ -29,7 +29,7 @@ function DeskImageConfig(props) {
     anima?h('div',{className:'ck-grid'},deskSelect(L('Anima 分支','Anima variant'),draft.animaVariant||'base',[['base','Base'],['aesthetic','Aesthetic'],['turbo','Turbo']],function(v){set('animaVariant',v);},disabled),
       field('artistTag',L('画师标签（可选）','Artist tag (optional)'),{maxLength:180}),['unet','clip','vae'].map(function(k){return h('div',{key:k},deskField(k.toUpperCase()+' · .safetensors',draft.modelFiles?.[k]||'',function(v){sub('modelFiles',k,v);},{disabled:disabled,maxLength:172,placeholder:L('本机文件名；留空用默认','Local filename; blank uses default')}));})):null,
     comfy?h('div',{className:'ck-grid'},number('seed',L('起始 Seed（后续槽 +1）','Base seed (+1 per slot)'),0,4294967280,1),number('steps',L('步数','Steps'),1,100,1),number('cfg','CFG',0,20,.1),
-      anima?number('width',L('宽（8 的倍数）','Width (multiple of 8)'),64,2048,8):null,anima?number('height',L('高（与宽同时填写）','Height (set with width)'),64,2048,8):number('denoise',L('去噪强度','Denoise'),.05,1,.05)):null,
+      anima?number('width',L('宽（16 的倍数）','Width (multiple of 16)'),64,2048,16):null,anima?number('height',L('高（16 的倍数，与宽同填）','Height (multiple of 16, set with width)'),64,2048,16):number('denoise',L('去噪强度','Denoise'),.05,1,.05)):null,
     model.nativeRgba?h('label',null,h('input',{type:'checkbox',disabled:disabled,checked:draft.rgbaTransparent!==false,onChange:function(e){set('rgbaTransparent',e.target.checked);}}),L('请求透明背景（以适配器和实际输出为准）','Request transparency (adapter and output dependent)')):null,
     !comfy?h('p',{className:'ck-muted'},L('本适配的精度、采样和尺寸按供应商合同设置，不显示未接线的通用滑杆。','This adapter uses provider-specific sizing and sampling. Unwired sliders are not shown.')):null,
     h('div',{className:'ck-row'},deskButton(L('保存本模型参数','Save settings for this model'),function(){props.save({action:'config',config:config()});},disabled||!changed,true),
@@ -88,8 +88,14 @@ function DeskImageWorkspace(props) {
     var hex=Array.from(bytes,function(b){return b.toString(16).padStart(2,'0');}).join('');
     return hex.slice(0,8)+'-'+hex.slice(8,12)+'-'+hex.slice(12,16)+'-'+hex.slice(16,20)+'-'+hex.slice(20);
   }
+  function modelDisplayName(m){
+    if(!m)return '';
+    if(lang==='En'&&m.nameEn)return m.nameEn;
+    if(lang==='En'&&/[\u4e00-\u9fff]/.test(m.name||''))return String(m.name).replace(/\s*[\u4e00-\u9fff]+\s*\/\s*/g,' ').replace(/[\u4e00-\u9fff]+/g,'').replace(/\s{2,}/g,' ').trim();
+    return m.name||m.id||'';
+  }
   function execute(){
-    if(cloud&&!window.confirm(model.name+' / '+config.apiModelOverride+' · '+slotList[0]+'\n\n'+t(usesRef?'cloudConfirmRef':'cloudConfirmText')))return;
+    if(cloud&&!window.confirm(modelDisplayName(model)+' / '+config.apiModelOverride+' · '+slotList[0]+'\n\n'+t(usesRef?'cloudConfirmRef':'cloudConfirmText')))return;
     var id=form.imageRequestId||newRequestId();if(!form.imageRequestId)studio.put('imageRequestId',id);
     studio.action('/studio/views/generate',Object.assign({},payload,{mode:'execute',requestId:id,expectedRevision:project.stateRevision,cloudConfirmed:cloud}),true).then(function(data){
       if(data&&data.verdict==='pass')studio.put('imageRequestId','');
@@ -98,8 +104,8 @@ function DeskImageWorkspace(props) {
   var modesOk=catalog||(!usesRef&&!qwen)||(usesRef&&hasOriginal&&(canReference||model.driver==='qwen_local'));
   var panel=form.imagePanel;
   return h('div',{className:'ck-image-workspace'},
-    deskSelect(t('model'),model.id,models.map(function(m){return [m.id,m.name];}),function(id){studio.put('model',id);},busy),
-    deskCard(model.name,h(React.Fragment,null,
+    deskSelect(t('model'),model.id,models.map(function(m){return [m.id,modelDisplayName(m)];}),function(id){studio.put('model',id);},busy),
+    deskCard(modelDisplayName(model),h(React.Fragment,null,
       h('div',{className:'ck-model-stats'},h('span',{className:'ck-pill','data-status':catalog?'pending':'in_progress'},model['adapter'+lang]||model.deployment),
         h('span',{className:'ck-chip'},t(model.weights||'unknown')),h('span',{className:'ck-chip'},'T2I '+(model.aaT2iRank?'#'+model.aaT2iRank:'—')),h('span',{className:'ck-chip'},'Edit '+(model.aaEditRank?'#'+model.aaEditRank:'—'))),
       h(DeskSwitch,{label:L('模型说明与设置','Model information and settings'),value:panel,options:[['tips','Tip'],['params',L('参数','Parameters')],['prompts',L('提示词模板','Prompt templates')]],change:function(v){studio.put('imagePanel',v);},disabled:busy}),

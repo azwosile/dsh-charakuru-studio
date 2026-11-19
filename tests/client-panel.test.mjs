@@ -39,7 +39,7 @@ function createElement(type, props, ...children) {
  * render and flushed after it, so a render here behaves like a mount.
  */
 function createHookRuntime() {
-  const cells = [];
+  let cells = [];
   const effects = [];
   let cursor = 0;
   const React = {
@@ -94,6 +94,18 @@ function createHookRuntime() {
       const pending = effects.splice(0, effects.length);
       pending.forEach((effect) => effect());
       return tree;
+    },
+    renderIsolated(Component, props) {
+      const prevCells = cells;
+      const prevCursor = cursor;
+      cells = [];
+      cursor = 0;
+      try {
+        return Component(props || {});
+      } finally {
+        cells = prevCells;
+        cursor = prevCursor;
+      }
     },
   };
 }
@@ -631,7 +643,7 @@ test('every stage exposes its own material entry; desktop native path and web ra
     mounted.sandbox.window.location=new URL(desktop?'dsh-app://app/':'http://127.0.0.1:51886/');
     mounted.sandbox.window.__DSH_HOST_PATHS__={pathFor(input){assert.equal(input,file);pathForCalls++;return 'D:/外部/外部素材.png';}};
     mounted.sandbox.window.__DSH_DIRECTORY_PICKER__={pick:async()=>dir};
-    const boot={version:'0.6.2',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
+    const boot={version:'0.7.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
       projectState:{stateRevision:1,activeStageId:'1_concept',stages:{},assets:{items:[],selected:{}},materials:{items:[],selected:{}}},projectSummary:{}};
     studio.set({boot,loaded:true});studio.put('projectDir',dir);
     mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?boot:{ok:true});};
@@ -666,12 +678,12 @@ test('every stage exposes its own material entry; desktop native path and web ra
   }
 });
 
-test('the 0.6.2 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
+test('the 0.7.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
   const storage=new Map();const mounted=await mount({storage});const studio=mounted.face.studio;
-  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.6.2',activeProjectDir:'/test',sessionToken:'fixture'});
+  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.7.0',activeProjectDir:'/test',sessionToken:'fixture'});
   const wrong=await studio.act(()=>studio.refresh(true));
   assert.equal(wrong,undefined);assert.equal(studio.getSnapshot().boot,null);
-  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.6\.2/);assert.equal(storage.has('avatar-studio-loopback'),false);
+  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.7\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
   studio.put('base','http://127.0.0.1:52886');
   const correct=await studio.act(()=>studio.refresh(true));assert.equal(correct.sessionToken,'fixture');
   assert.equal(studio.getSnapshot().result.sessionToken,undefined);
@@ -681,20 +693,42 @@ test('the 0.6.2 renderer cannot keep an old Host connection or carry its token t
 });
 
 
-test('Tripo generation-confirmed panel uses native file picking only on DSH desktop',async()=>{
+test('Tripo generation-confirmed panel supports native path picking on Desktop and binary upload on Web',async()=>{
   const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS }=await import('../lib/constants.js');
   const { queryModelCatalog }=await import('../lib/catalog/aa-image-hub.js');
   const mounted=await mount(),studio=mounted.face.studio;
   const project={stateRevision:4,activeStageId:'3_tripo',assets:{items:[],selected:{}},stages:{},workflow:{mode:'illustration'},tripoStudio:{tickets:[{id:'fixture-ticket',part:'head',creditCap:5,quotedCredits:4,status:'generation_confirmed',inputs:[],downloads:[]}]}};
-  studio.set({tab:'tripo',loaded:true,boot:{projectExists:true,activeProjectDir:'fixture',projectState:project,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,aaCatalog:queryModelCatalog()}});
+  const bootObj={version:'0.7.0',sessionToken:'tripo-sess',projectExists:true,activeProjectDir:'fixture',projectState:project,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,aaCatalog:queryModelCatalog()};
+  studio.set({tab:'tripo',loaded:true,boot:bootObj});
   const panel=()=>mounted.runtime.render(mounted.main.component,mounted.face);
+  const file={name:'candidate.glb',size:256};
   for(const [desktop,origin] of [[true,'dsh-app://app/'],[false,'http://127.0.0.1:54886/']]){
+    const calls=[];
     mounted.sandbox.window.location=new URL(origin);
+    mounted.sandbox.window.__DSH_HOST_PATHS__=desktop?{pathFor:()=>'D:/Downloads/candidate.glb'}:undefined;
+    mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?bootObj:{ok:true});};
     const ticket=hostNodes(nested(mounted,panel(),'DeskTripoStudio'));
-    assert.equal(ticket.some(n=>n.type==='input'&&n.props.type==='file'),desktop);
+    const picker=ticket.find(n=>n.type==='input'&&n.props.type==='file');
+    assert.ok(picker,'file input must be rendered on both Desktop and Web');
+    assert.equal(picker.props.accept,'.glb,.fbx');
     assert.ok(ticket.some(n=>n.type==='a'&&n.props.href==='https://studio.tripo3d.ai/'&&n.props.target==='_blank'));
     assert.ok(ticket.some(n=>n.type==='button'&&textOf(n)==='Collect a candidate (do not adopt)'));
     assert.ok(!ticket.some(n=>n.type==='iframe'));
+    picker.props.onChange({target:{files:[file],value:'picked'}});
+    await new Promise(setImmediate);
+    const sent=calls.find(c=>c.init?.method==='POST');
+    assert.ok(sent);
+    if(desktop){
+      assert.equal(new URL(sent.url).pathname,'/studio/tripo/studio/collect');
+      assert.equal(JSON.parse(sent.init.body).sourceGlbPath,'D:/Downloads/candidate.glb');
+    }else{
+      const u=new URL(sent.url);
+      assert.equal(u.pathname,'/studio/tripo/studio/upload');
+      assert.equal(u.searchParams.get('ticketId'),'fixture-ticket');
+      assert.equal(u.searchParams.get('fileName'),'candidate.glb');
+      assert.equal(sent.init.headers['Content-Type'],'application/octet-stream');
+      assert.equal(sent.init.headers['X-Charakuru-Session'],'tripo-sess');
+    }
   }
   studio.set({tab:'models'});studio.put('model','mai-image-2.7');
   const catalog=hostNodes(nested(mounted,panel(),'DeskImageWorkspace'));
@@ -706,7 +740,7 @@ test('Tripo generation-confirmed panel uses native file picking only on DSH desk
   studio.put('imageMode','text_to_image');
   studio.put('imageScope','head_front');
   const bootState=studio.getSnapshot().boot;
-  mounted.sandbox.fetch=async url=>Response.json(new URL(url).pathname==='/studio/bootstrap'?{...bootState,version:'0.6.2'}:{ok:true,allowed:true,verdict:'pass'});
+  mounted.sandbox.fetch=async url=>Response.json(new URL(url).pathname==='/studio/bootstrap'?{...bootState,version:'0.7.0'}:{ok:true,allowed:true,verdict:'pass'});
   let imgTree=nested(mounted,panel(),'DeskImageWorkspace');
   btn(imgTree,'Check capabilities').props.onClick();
   await new Promise(setImmediate);
@@ -716,4 +750,129 @@ test('Tripo generation-confirmed panel uses native file picking only on DSH desk
   genBtn.props.onClick();
   await new Promise(setImmediate);
   assert.equal(studio.getSnapshot().form.imageRequestId,'');
+  mounted.harness.dispose();
+});
+
+function renderDeep(runtime, node) {
+  if (node === null || node === undefined || typeof node === 'boolean' || typeof node === 'string' || typeof node === 'number') return node;
+  if (Array.isArray(node)) return node.map(child => renderDeep(runtime, child));
+  if (typeof node.type === 'function') {
+    return renderDeep(runtime, runtime.renderIsolated(node.type, node.props || {}));
+  }
+  return { ...node, children: (node.children || []).map(child => renderDeep(runtime, child)) };
+}
+
+test('v0.7.0 English mode emits zero CJK characters across all 9 rendered tabs and exposes Web folder browser & Blender channel controls', async () => {
+  const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
+  const { MATERIAL_ROLES } = await import('../lib/project/material-roles.js');
+  const { queryModelCatalog } = await import('../lib/catalog/aa-image-hub.js');
+  const { TRIPO_STRATEGIES } = await import('../lib/tripo/free-quota-scheduler.js');
+  const { RENDER_PRESETS } = await import('../lib/project/render.js');
+
+  const mounted = await mount();
+  mounted.sandbox.window.location = new URL('http://127.0.0.1:54886/');
+  const studio = mounted.face.studio;
+  const revId = 'rev-00000001-0000-0000-0000-000000000001';
+  const projectState = {
+    stateRevision: 7,
+    projectName: 'EnglishAuditDemo',
+    activeStageId: '4_assembly',
+    workflow: { mode: 'base_mesh', foundation: { body: 'material_11111111-1111-1111-1111-111111111111', head: 'embedded' } },
+    stages: Object.fromEntries(PIPELINE_STAGES.map(s => [s.id, { status: s.index < 4 ? 'completed' : 'in_progress' }])),
+    views: Object.fromEntries(REQUIRED_VIEW_SLOTS.map(s => [s.id, { status: 'missing' }])),
+    assets: {
+      items: [
+        { id: 'asset-img-1', kind: 'image', slotId: 'source', label: 'Concept art', bytes: 2048, sha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+        { id: 'asset-glb-1', kind: 'glb', part: 'head', label: 'Head mesh', bytes: 4096, renderable: true, sha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+      ],
+      selected: { source: 'asset-img-1', head: 'asset-glb-1' },
+    },
+    materials: {
+      items: [
+        { id: 'material_11111111-1111-1111-1111-111111111111', stageId: '4_assembly', role: 'foundation_body', intent: 'scene', extension: '.blend', fileName: 'body.blend', sha256: 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc', bytes: 8192 },
+        { id: 'material_22222222-2222-2222-2222-222222222222', stageId: '4_assembly', role: 'tripo_clothing_reference', intent: 'tripo_reference', extension: '.png', fileName: 'coat_front.png', sha256: 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', bytes: 1024 },
+      ],
+      selected: {},
+    },
+    editor: {
+      version: 1,
+      activeRevisionId: revId,
+      channelPreference: 'auto',
+      guiCheckout: null,
+      pendingJob: null,
+      requests: [],
+      view: { camera: 'front', overlayAssetId: null, overlayOpacity: 0.35 },
+      revisions: [
+        {
+          id: revId,
+          parentId: null,
+          operation: 'import_material_scene',
+          artifacts: {
+            blend: { filePath: 'editor/revisions/1/scene.blend', sha256: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' },
+            preview: { filePath: 'editor/revisions/1/preview.glb', sha256: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' },
+          },
+          audit: { objects: [{ name: 'Yumeka_Body', type: 'MESH', vertices: 500 }], gates: { weights: true, textures: true }, notes: [] },
+        },
+      ],
+    },
+    rendering: { requests: [] },
+    tripoStudio: { tickets: [] },
+    tripoQuota: { monthlyAllowance: 200, creditsUsed: 0, remainingCredits: 200, openapiTasks: [] },
+    characterSpec: { characterPrompt: 'Anime heroine in white blazer', sourceImages: [] },
+    vrmMetadata: { title: 'EnglishAuditDemo', authors: ['Creator'] },
+  };
+
+  const boot = {
+    version: '0.7.0',
+    sessionToken: 'en-audit-token',
+    projectExists: true,
+    activeProjectDir: 'D:/Projects/EnglishAuditDemo',
+    stages: PIPELINE_STAGES,
+    requiredViewSlots: REQUIRED_VIEW_SLOTS,
+    materialRoles: MATERIAL_ROLES,
+    renderPresets: RENDER_PRESETS,
+    aaCatalog: queryModelCatalog(),
+    tripoStrategies: Object.values(TRIPO_STRATEGIES),
+    credentials: [{ id: 'tripo', configured: true, source: 'store' }],
+    blenderBridge: { linked: false, protocol: 'unavailable' },
+    projectState,
+    projectSummary: { percent: 50, completedStages: 3, readyViews: 0, remainingFreeCredits: 200 },
+  };
+  studio.set({ loaded: true, boot, settingsOpen: true });
+
+  const allTabs = ['pipeline', 'assets', 'editor', 'render', 'materials', 'models', 'tripo', 'blender', 'credentials'];
+  const cjk = /[\u4e00-\u9fff]/;
+  for (const tab of allTabs) {
+    studio.set({ tab });
+    const deepTree = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+    const visibleText = textOf(deepTree);
+    assert.equal(cjk.test(visibleText), false, `CJK character leaked in English mode on tab "${tab}": ${visibleText.match(/[\u4e00-\u9fff]+/g)?.slice(0, 5)}`);
+  }
+
+  // Verify Web folder browser button calls POST /studio/fs/browse when desktop picker is absent
+  const calls = [];
+  mounted.sandbox.fetch = async (url, init) => {
+    calls.push({ url, init });
+    const p = new URL(url).pathname;
+    if (p === '/studio/fs/browse') return Response.json({ ok: true, currentDir: 'D:/Projects', parentDir: 'D:/', isProject: false, directories: [{ name: 'Demo', path: 'D:/Projects/Demo' }] });
+    if (p === '/studio/fs/mkdir') return Response.json({ ok: true, createdDir: 'D:/Projects/NewChar' });
+    return Response.json(p === '/studio/bootstrap' ? boot : { ok: true });
+  };
+  studio.set({ tab: 'pipeline', settingsOpen: true });
+  const topTree = mounted.runtime.render(mounted.main.component, mounted.face);
+  const browseBtn = btn(topTree, 'Browse local folders');
+  assert.ok(browseBtn, 'Web shell must render Browse local folders button');
+  browseBtn.props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(calls.some(c => new URL(c.url).pathname === '/studio/fs/browse'), true);
+
+  // Verify Blender Dual-Channel controls render in editor/blender tabs and trigger /studio/editor/gui-checkout
+  studio.set({ tab: 'blender' });
+  const blenderTree = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  const checkoutBtn = btn(blenderTree, 'Check out GUI working copy');
+  assert.ok(checkoutBtn, 'Blender Dual-Channel controls must render Check out GUI working copy');
+  checkoutBtn.props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(calls.some(c => new URL(c.url).pathname === '/studio/editor/gui-checkout'), true);
+  mounted.harness.dispose();
 });

@@ -1,82 +1,77 @@
 ---
 name: charakuru-vrm-studio
-description: 使用独立角色工作台管理 2D 到 VRM 工程、编译 11 视图提示词、导出生图工作流、规划 Tripo 预算并通过伴随插件运行 Blender 草稿脚本。适用于角色拆件、多视图、GLB 归档和 VRM 制作辅助；骨架、裙摆和表情效果需人工验收。
+description: 使用独立角色工作台（Avatar Studio for DSH v0.7.0）管理 2D 原画重建与素体改型双路线 VRM 工程、编译 11 视图提示词、导出生图工作流、双通道调度 Tripo（OpenAPI v3 + 多视角网页工单）并通过 Blender 双通道（dsh-blender-plugin 契约层 + Agent Computer-Use GUI 签出/签入）执行建模与独立渲染。
 ---
 
-# 角色工程操作规程
+# 角色工程操作规程（v0.7.0）
 
-先读取 `charakuru_project(action="status", projectDir=...)`。工程尚未创建时使用 `action="init"`，填写角色描述和账户实际月额度。所有工具明确传入 `projectDir`；默认目录固定，不随其他会话切换。
+先读取 `charakuru_project(action="status", projectDir=...)`。工程尚未创建时使用 `action="init"`，填写角色描述和账户实际月额度。所有工具明确传入 `projectDir`；默认目录固定，不随其他会话切换。可通过 `set_workflow_mode`、`select_foundation`、`plan_tripo_parts`、`import_material` 管理路线切换与物料导入。
 
-## 0.6.1 · AI 优先的双路线与渲染接力
+## 0.7.0 · 双路线、双通道（Tripo × Blender）与独立渲染接力
 
-- 工作台交接到当前 DSH 会话的是草稿，用户发送才作业。建模用 `charakuru_blender_avatar(action="editor_inspect", projectDir, editRequestId)` 读取绑定修订的实际对象、键、骨架。随后用 `editor_operation`、该 `editRequestId` 和 `expectedRevisionId` 调用允许的工序。你要按自然语言目标拟定参数，不要让用户代填 XYZ、骨骼名或形态键；遇到无法安全判断的审美或授权再问。
-- `base_mesh` 先采用已登记的 `foundation_body` 再读取可信 Blend。`fit_foundation` 保留已有权重、UV、脸；用实际 `bodyObject`、`armature`、有界 scale 与已有 `shapeValues`。`append_foundation_head` 必须先等 editor_inspect 返回供体清单（`donorPending` 时同一调用收集），用已采用的 `foundation_head`，不猜名称。不声称自动焊颈、眼口或表情匹配。编辑后由用户批准/退回，不代审。
-- Tripo 工单：用 `charakuru_tripo_quota(action="studio_status", projectDir, ticketId)`。仅使用当前会话可用、用户明确授权的已登录 Chromium 标签页和 `https://studio.tripo3d.ai/`；没有浏览器工具则由用户照工单操作。`upload_authorized` 前不得上传；之后只使用工单的校验 PNG。报告提供商实际报价，用户确认后自己点 Generate。你不点生成、不记账、不自动重跑。下载后 `studio_collect` 只登记该工单回收目录内指定的自包含 GLB；用户挑候选。
-- `charakuru_render(action="status", projectDir, requestId)` 核对绑定修订和人类要求，再用 `run` + `expectedRevisionId` + 自行拟定的 `recipe`。镜头、取景、尺寸和 palette 必填；`preset=custom` 可设 bounded `lighting`，学习方案不作为默认。只用受限工具，不任意执行 Python、不上传、不改模型。返回 `queued` 在提交的 execution 调 `collect`，超时对回执而非重发。PNG 由用户单独审阅。
+- **AI 协作草稿与修订绑定**：工作台交接到当前 DSH 会话的是草稿，用户发送才作业。建模先调用 `charakuru_blender_avatar(action="editor_inspect", projectDir, editRequestId)` 读取绑定修订的实际对象、形态键、骨架与供体清单（无 `editRequestId` 时可只读审查当前活动修订；也可以用 `list_materials` 查看已登记物料）。随后按自然语言目标自行拟定结构化参数，调用 `editor_operation`（携带 `editRequestId` 与 `expectedRevisionId`）或双通道动作，不要让用户代填 XYZ、旋转角、骨骼名或形态键；遇到无法安全判断的审美或授权再问。支持 `editor_rollback` 回退到任意已验证的历史修订。
+- **双制作路线（`illustration` 与 `base_mesh`）**：
+  - `illustration`（原画重建）：原画与设定 → 8+3 多视图生成 → Tripo 头/体候选生成与对比 → Blender 装配/比例 → 骨骼权重与物理弹簧 → 表情与 VRM 1.0 导出。
+  - `base_mesh`（素体改型）：先登记并采用 `foundation_body`（及可选 `foundation_head`）再通过 `import_material_scene` 创建起始修订。`fit_foundation` 保留已有权重、UV 与拓扑，使用实际 `bodyObject`、`armature`、有界 `scale` 与已有 `shapeValues`。`append_foundation_head` 必须先等 `editor_inspect` 返回供体清单（`donorPending` 时同一调用收集），使用已采用的 `foundation_head` 与有界 `scale`/`translation`/`rotation`，不猜对象名，也不声称自动焊颈或表情匹配。外部衣/发/饰使用 `append_material_mesh` 追加，贴图通过 `apply_material_texture` 绑定。编辑后由用户在工作台批准或退回，Agent 不代审。
+- **独立 AI 渲染台（`charakuru_render`）**：调用 `charakuru_render(action="status", projectDir, requestId)`（或 `action="list"` 查看历史渲染请求）核对绑定修订和人类要求，再用 `action="run"` + `expectedRevisionId` + 自行拟定的 `recipe`。镜头（`camera`）、取景（`framing`）、尺寸（`size`）和配色（`palette`）必填；`preset="custom"` 可设受界 `lighting`。返回 `queued` 时在同一 DSH 执行上下文调用 `charakuru_render(action="collect", projectDir, requestId)` 收集结果，超时核对回执而非换 ID 重发；未完成时可使用 `action="cancel"`。产出的 PNG 由用户单独审阅，不改动模型修订或关卡状态。
 
-## 六个关卡
+## 六个关卡与全流程门禁
 
-1. `1_concept`：明确外观、预算、模型、参考图与交付要求。
-2. `2_views`：头部四视图、身体四视图、全身比例三视图。头部闭口且无遮挡，身体水平 T-pose；对齐眼线、肩线、胯线和鞋底。
-3. `3_tripo`：生成手动 Studio 操作计划，用户网页提交、下载 GLB 并归档。
-4. `4_assembly`：导入、比例草稿、对象分组、多角度检查。
-5. `5_rig_spring`：启发式骨架权重与裙摆骨架草案；人工配置弹簧、碰撞体和服装权重。
-6. `6_expressions_vrm`：表情草稿、元数据与导出尝试；检查位移、预设绑定、动作及查看器表现。
+1. `1_concept`：明确外观设定、预算、偏好模型与工程内参考图（或纯文生图设定）。
+2. `2_views`：头部四视图、身体四视图、全身比例三视图（共 11 槽，或 `base_mesh` 路线下的素体与部件规划）。头部闭口且无遮挡，身体水平 T-pose；对齐眼线、肩线、胯线和鞋底。
+3. `3_tripo`：通过 Tripo 双通道生成或归档头/体/衣/发/饰候选 GLB，并在工作台预览采用。
+4. `4_assembly`：导入检查点或素体场景、部件追加、比例与旋转对位、结构与贴图审计（绑定活动 `editor.revisions` 的 Blend/GLB/Audit SHA-256）。
+5. `5_rig_spring`：骨架权重转移与归一化、VRM humanoid 骨骼映射、SpringBone 弹簧链/碰撞体配置及姿态探针核验（`gates.weights` 与审计证据通过）。
+6. `6_expressions_vrm`：表情与 VRM 元数据配置（Title/Authors/许可证）、`export_vrm` 导出 VRM 1.0 容器并同步 `vrmMetadata.exportedVrmPath`。
 
-完成当前阶段后用 `charakuru_project(action="checkpoint", checkpointAction="request_review", ...)` 提交证据。Agent 工具支持提交审阅和恢复编辑；用户在侧栏「Charakuru 工作台」批准或要求修改。逐关推进，禁止将脚本执行成功替代人工验收。
+**全 6 关均支持提交审阅**：完成任一阶段（`1_concept` 至 `6_expressions_vrm`）且证据或活动编辑修订就绪后，均可调用 `charakuru_project(action="checkpoint", checkpointAction="request_review", stageId=..., projectDir=...)` 提交证据（或用 `reopen_stage` 重新打开修订）。所有图像、GLB 与 Blend 修订均由 SHA-256 指纹绑定审阅，变更后必须重新审批。用户在「Avatar Studio 工作台」批准或要求修改；禁止将脚本进程成功替代人工视觉验收，也严禁借本地 HTTP session token 绕过用户审阅。
 
-## 生图
+## 生图与预算门禁
 
-`charakuru_aa_models(action="leaderboard")` 查询 2026-11-18 静态 AA v2.1 榜单与适配状态；`action="compile_prompts"` 编译逐槽提示词。基准名次不是接口、费用或视觉质量凭证。
+`charakuru_aa_models(action="leaderboard")` 查询静态 AA v2.1 榜单与适配状态；`action="compile_prompts"` 编译逐槽提示词（传入 `projectDir` 时自动合并项目保存的 `imageProfiles` 自定义模板）。基准名次不是接口、费用或视觉质量凭证。
 
-`charakuru_generate_views` 默认为导出预案。实际本机 `execute` 要求稳定的 `requestId`、真实启动的服务和用户明确需求。传 `imageMode="text_to_image"` 或 `"image_to_image"`，后者没有工程 PNG 时失败，不改成文字。项目可保存逐模型参数与逐槽模板，执行沿用这些设置。不要猜软件、模型权重可用，不要主动安装。云端只能由用户在工作台确认单槽、授权上传及费用后启动，Agent 工具不派发付费云端生成。
+`charakuru_generate_views` 支持 `action="preflight"`、`action="get_profile"`、`action="save_profile"` 与 `action="generate"`（默认为导出预案 `mode="plan"`）。实际本机 `mode="execute"` 要求稳定的 `requestId`、真实启动的本地服务和用户明确需求；重试同一任务时必须保持 `requestId` 不变，新 ID 代表新任务。传 `imageMode="text_to_image"` 或 `"image_to_image"`，后者缺少工程参考 PNG 时直接失败，绝不静默丢弃参考图退回文生图。
 
-- Qwen：Diffusers 预案可用原画；兼容 HTTP 文生图不传原画。`qwen-image-2.1-comfy-edit` 需要 `comfyuiQwenWorkflowPath` 和一张的工程原画。模板验证通过仍不表示模型装齐。
-- Anima：内置图为文生图。Aesthetic 正负提示均去 score_*；Turbo 使用独立模型、CFG 1/8 步。仅在用户明确允许的文生图任务运行 Anima。
-- NovelAI V5 实验协议不传参考；V4.5 Precise Reference 单独选卡。官方 GPT/Gemini/Ark 与自配网关路由、凭据独立；榜单目录项无运行路由。
+- **Qwen**：Diffusers 离线脚本支持参考图；通用兼容 HTTP 文生图不传原画。`qwen-image-2.1-comfy-edit` 需要 `comfyuiQwenWorkflowPath` 和一张工程原画。
+- **Anima**：内置工作流仅用于文生图（分辨率需为 16 的倍数）。Aesthetic 正负提示均去 `score_*`；Turbo 使用独立模型、CFG 1 / 8 步。
+- **云端与网关**：`allowCloudExecution` 默认关闭。NovelAI V5 实验协议不传参考图，V4.5 Precise Reference 单独选卡；官方 OpenAI (`gpt-image-*`)、Google Gemini (`nano-banana-2.1`)、火山方舟 (`seedream-5.5`) 与自配网关（`openai_compat`）凭据独立（通过 `charakuru_credentials` 检查状态，不回显明文密钥）。付费云端生图只能由用户在工作台单槽确认后启动，Agent 工具不自动派发付费云端生成；超时或状态未明时保留 `requestId` 对账，不换 ID 重发，也不自动切换服务。
 
-成功产物要登记真实 PNG。重复生成已有槽位先保留新候选，不覆盖已选版本。未生成、失败、计费不确定时报告状态，不代验收、不换 ID 重发、不自动改用另一个服务。
+## Tripo 双通道（OpenAPI v3 × 浏览器多视角工单）
 
-## Tripo
+`charakuru_tripo_quota` 同时支持规划、OpenAPI v3 与网页浏览器接力双通道，共用不可变候选库与独立账本（Studio 网页额度与 OpenAPI 余额严格分账）：
 
-`charakuru_tripo_quota(action="plan")` 仅规划。默认 200 月额度及 95/145 消耗为可改假设；以账户价格、重试、历史保留和导出权益为准，OpenAPI 独立余额。该插件不自动点击网页，也不控制其他会话的并发。
+1. **通道 A：Tripo OpenAPI v3**：
+   - `action="openapi_balance"`：零成本实时查询独立 OpenAPI 账户余额。
+   - `action="openapi_submit"`：在 `allowCloudExecution=true`、用户显式确认报价且绑定 `requestId` / `expectedRevision` 与预算预留（`reserve`）后，上传授权 PNG 并提交 `image_to_model`、`multiview_to_model`（至少 2 张且必含 `front`）或后处理任务。遵守参数防呆铁律：需要后处理（贴图/绑定/转换）时禁止设置 `export_orientation`；`generate_parts=true` 与 `texture`/`pbr`/`quad`/`smart_low_poly` 互斥。网络超时或状态未明时转入 `uncertain` 并保留 `taskId` 对账，严禁换 ID 自动重试。
+   - `action="openapi_poll"`：轮询 `GET /v3/tasks/{task_id}`；一旦状态为 `success`，遵循 **5 分钟 URL 时限铁律**立即下载并校验归档到工程候选库，完成预算结算（`settle`）。
+2. **通道 B：浏览器多视角人工工单与本地归档**：
+   - `action="studio_status"` 读取工单（路线 1 绑定 4 张已审视图；路线 2 `base_mesh` 支持绑定 **1–4 张**同部件多视角参考 PNG `referenceMaterialIds`）。
+   - 仅使用用户明确授权的已登录标签页和 `https://studio.tripo3d.ai/`；`upload_authorized` 前不得上传；报告实际报价并经用户 `confirm_quote`（直接返回 `inbox` 回收目录）后由用户点击 Generate。支持桌面原生路径与同机 Web 二进制上传（`POST /studio/tripo/studio/upload`），下载后用 `action="studio_collect"` 或 `action="archive_glb"`（支持 `head`/`body`/`clothing`/`hair`/`accessory`）校验归档。归档或导入不等于采用，由用户在资产库预览并选定候选。
 
-用户下载后调用 `action="archive_glb"`，填写部件、文件路径、实际消耗和远端任务 ID。归档校验 GLB 2 容器和 SHA-256；任务 ID 幂等去重，冲突时先核对记录。文件格式通过仍需伴随插件做拓扑和网格语义检查。
+## Blender 双通道与混合接力规则
 
-## Blender
+先调用 `charakuru_blender_avatar(action="probe", projectDir=..., sceneQuery=...)` 探测实际协议（自动识别 legacy 3.0.6 `9877` 与 3.1 Gateway `39877` 及 `/host/scene-items` 实时场景对象，禁止从端口猜测协议版本；多桥接冲突须先处理）。所有 Blender 打开操作均遵循 VRM-first 发现机制，在 `open_mainfile` 前启用官方 VRM Add-on。
 
-先调用 `charakuru_blender_avatar(action="probe")`。使用伴随插件前读取 `blender-modeling` 技能和 `blender_rt_plan(op="catalog")`，已有网格、装配、修复、门和导出操作优先使用。
+### 通道 1：`dsh-blender-plugin` 契约层与结构化脚本（Headless / GUI `/act`）
+- **适用场景**：批量参数化建模工序、结构化装配、权重转移、VRM 导出与离线多机位 Eevee 渲染。
+- **工具协同与版本映射**：
+  - 优先读取 `blender-modeling` 技能并协同使用 `dsh-blender-plugin` 的 34 family / 228 op 契约层（`catalog`、`asm_*`、`img_*`、`visualreport`、`gate_*`、`deliver_export`）。
+  - 在 3.0.6 环境对应 `blender_rt_plan`、`blender_rt_do`、`blender_rt_script`、`blender_rt_txn`（GUI 修改前打事务快照以便出错回滚）、`blender_rt_see`（抓取多视角实时截图）、`blender_rt_job`；在 3.1 Gateway 环境对应 `blender_op`、`blender_run`、`blender_py`、`blender_session(action="txn")`、`blender_see`（3.1 GUI 执行需传入已 attach/grant 的 `sessionId`，身份由真实 DSH execution 上下文提供）。
+  - 通过 `charakuru_blender_avatar` 提交的阶段或编辑器异步作业返回 `jobId` 时，**必须分别使用 `charakuru_blender_avatar(action="collect_job")`（针对 `run_stage`）或 `charakuru_blender_avatar(action="editor_collect")` / `editor_cancel`（针对 `editor_operation`）收集并落盘到工程检查点/修订树**；渲染队列使用 `charakuru_render(action="collect")`。
 
-生成脚本时明确输入。执行全部要求可用 VRM Add-on，并在打开含 VRM 数据的 blend 前启用。VRM Add-on 缺失时修正环境后再试；保留原始资产和分阶段检查点。
+### 通道 2：Agent Computer-Use（桌面 GUI 签出 / 签入协议）
+- **适用场景**：契约层难以覆盖的自由手工微调，如 Sculpt 笔刷推平穿模、Weight Paint 逐顶点刷权重、局部拓扑补洞、复杂 Shader 节点连线或第三方 Blender 插件交互。
+- **标准三步协议**：
+  1. `charakuru_blender_avatar(action="checkout_gui", projectDir, expectedRevisionId, note)`：校验基线修订与 SHA-256，获取工程 `guiLock`，将源 `.blend` 拷贝至隔离工作区 `editor/working/<checkoutId>/scene.blend`（保护 `editor/revisions/` 与用户源 `.blend` 100% 只读）。
+  2. Agent 通过桌面 Computer-Use 在 Blender GUI 中打开并编辑 `editor/working/<checkoutId>/scene.blend`，原位保存（期间锁定并发 `editor_operation`）。
+  3. `charakuru_blender_avatar(action="checkin_gui", projectDir, checkoutId, expectedRevisionId, exportVrm=...)`：通过 companion 自动执行打包贴图（`pack_all`）、导出 `preview.glb`（及可选 `avatar.vrm`）、运行 `audit()` 并计算全产物 SHA-256，固化为新的不可变修订 `editor/revisions/<newId>/` 后释放 `guiLock`。若放弃草稿则调用 `action="abort_gui"` 清理工作区并释放锁。
+- **混合接力与偏好切换**：两条通道共享同一套 `editor.revisions[]` 修订树，可在同一角色上分段交替使用；可通过 `action="set_channel_preference"` 在 `auto`（自动择优）、`plugin`（优先插件契约）与 `computer_use`（优先 GUI 桌面操控）之间切换。
 
-- `stage1_safe_import`：现有 blend 或头体 GLB 导入，检查场景网格。
-- `stage2_assembly_ratio`：独立网格比例和分组草稿；已有骨架时停止，避免挂点不同步。
-- `stage3_rig_weights`：创建新的启发式 humanoid 与高斯权重；检测已有骨架时停止，改走显式映射流程。
-- `stage4_skirt_springs`：只生成裙摆骨架草稿，SpringBone joints、碰撞体与裙摆权重需后续配置。
-- `stage5_expressions_vrm`：恰好一个明确头部网格，尝试 23 形态键和 VRM 预设绑定；零位移、绑定失败或导出未 FINISHED 时失败。
+### 完整工序与阶段清单
 
-阶段 2–5 返回 `degraded`，等待独立检查。回执必须包含真实结构化结果及产物；进程 `ok` 不证明资产通过。长任务提升为 job 后用 `blender_rt_job` 收集，当前插件不自动提交 job 产物到检查点。
-
-拓扑编辑前保存回退点。用伴随 audit、asm、gate、visualreport 和动作检查形成证据；自交、漂移、腿裙间隙需真实网格或动作判据，禁止构造与几何无关的标量寻优。VRM 容器含扩展仅证明格式，外部查看器和运动质量单独验收。
-
-## 0.2.0 资产与协议约束
-
-- `charakuru_project(action="import_asset", assetKind="image", slotId="head_front", sourcePath=..., projectDir=...)` 登记真实 PNG；`action="scan_views"` 扫描离线 11 槽位生成结果。GLB 用 assetKind="glb" 与 part。
-- 导入/归档不等于选择 GLB；请用户在资产库预览并采用头/身候选。所有图像与候选由文件 SHA-256 绑定审阅，变更后必须重新审批。
-- 当前仅开放前三阶段证据审批，后续启发式工序不允许标记为完整交付。
-- 执行前核对参考图适配能力，不把参考图丢弃后改成文生图。Qwen 通用兼容端点/Anima 内置图仅文生图；可明确选择 ComfyUI Qwen 编辑、离线 Diffusers 或手工导入。
-- `charakuru_blender_avatar(action="probe")` 探测实际协议，不从端口猜版本；多桥接冲突须先处理。
-- 3.1 GUI 执行传入已 attach/grant 的 Blender `sessionId`；DSH Host/agent/session 身份由 execution 上下文取得，禁止虚构。
-- 新队列提交后返回 jobId，使用 `charakuru_blender_avatar(action="collect_job", projectDir=...)` 收集真实产物。不要重复 run_stage。未完成、失败或身份不符时保留工程状态，按伴随工具诊断，不声称任务已成功。
-- 本地 HTTP session token 不是人类身份认证；Agent 不得借 HTTP 绕过“请用户审阅”的流程。
-
-
-## 0.3.0 显式编辑路线
-
-显示品牌 Avatar Studio，包/工具 ID 保持兼容；无需启动或调用原版。默认禁止云端执行；本地服务未连接时不要自行改用云端。生图 `requestId` 必须在重试时保持不变；新 ID 是新任务。手工账户账本不能代替供应商报价或防止外部消费。
-
-现有有权使用的 Blend 优先用 `charakuru_blender_avatar(action="editor_operation", editorOperation="import_blend", editorParams={sourceBlend,vrmAddonPath}, projectDir=...)`，不要让 legacy 高斯权重工序覆盖现有 rig。后续传入明确 expectedRevisionId。
-
-支持 audit/head_scale/transform/materials/transfer_weights/normalize_weights/configure_vrm/spring_setup/pose_check/export_vrm。参数与限制见 docs/OPERATIONS.md。AI 请求登记不等于执行；输出通过仅表示结构，视觉审阅始终 required。collect/cancel 使用 editor_collect/editor_cancel；取消请求不是终态。3.1 编辑队列尚未实机验收。
-
-素材、Blend/VRM、截图和本机账户信息不得提交公开仓库。私测导出中的作者占位不是可发布授权声明。完整 P2～P5 未全验收，按 docs/RELEASE-0.3.0.md 如实报告缺口。
+- **结构化编辑器工序（`action="editor_operation"`，17 项 `editorOperation`）**：
+  - 导入与物料接力：`import_blend`（导入用户选定 `.blend`）、`import_checkpoint`（接力本工程已指纹登记的 Blender 检查点）、`import_material_scene`（从已采用的 `foundation_body` 或 `assembly_scene` 创建起始修订）、`append_material_mesh`（追加 `tripo_clothing`/`tripo_hair`/`tripo_accessory`/`accessory_mesh` 网格）、`apply_material_texture`（将 `texture_sheet` PNG 应用到目标网格材质 Base Color）。
+  - 素体与几何变换：`fit_foundation`（保持素体拓扑、UV 与权重的有界 `scale` + `shapeValues` 塑形）、`append_foundation_head`（将已验证 `foundation_head` 供体头部网格按 `headBone`、`replaceHeadObjects`、`scale`/`translation`/`rotation` 对位绑定）、`head_scale`（头骨及子骨联动缩放 `0.75..1.25`）、`transform`（对显式网格执行有界 `scale`、`translation` 与欧拉角 `rotation` `[-360..360]` 变换）。
+  - 审计、材质与绑定导出：`audit`（网格/骨架/形态键/缺失贴图/权重/SpringBone 结构审计）、`materials`（`preserve` 或 `pbr` 启发式色图绑定）、`transfer_weights`（从显式同工程 `sourceMesh` 求值表面按 `maxTransferDistance` 采样转移变形骨权重）、`normalize_weights`（归一化变形骨权重并拦截零权重点）、`configure_vrm`（配置 VRM 1.0 humanoid 骨骼映射与作者/权限元数据）、`spring_setup`（配置 SpringBone 链条、碰撞体胶囊及可选裙摆骨架）、`pose_check`（人形骨姿态探针）、`export_vrm`（权重与纹理门禁核验后导出 VRM 1.0 `avatar.vrm` 并更新 `exportedVrmPath`）。
+- **Clean-Room 启发式阶段脚本（`action="run_stage"`）**：
+  - `stage1_safe_import`、`stage2_assembly_ratio`、`stage3_rig_weights`、`stage4_skirt_springs`、`stage5_expressions_vrm`。其中阶段 2–5 返回 `degraded`，表示启发式草案需独立检查与人工视觉验收；进程 `ok` 或容器扩展存在不等于成品交付，须结合审计、姿态探针与外部 VRM 查看器共同验收。

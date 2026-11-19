@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio",
-    "description": "0.6.2 experimental: AI-guided editing and local render review, Tripo browser handoffs, explicit ComfyUI generation modes, per-model settings and editable prompts. Cloud execution off by default.",
+    "description": "0.7.0 experimental: dual-route AI modeling and local render review, Blender dual-channel (companion contract + Computer-Use GUI checkout/checkin), Tripo OpenAPI v3 and multi-view browser handoffs, adaptive light/dark UI. Cloud execution off by default.",
     "detail": "docs/DETAIL.en.md"
   }
 }

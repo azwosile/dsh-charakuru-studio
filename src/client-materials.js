@@ -127,7 +127,9 @@ function MaterialWorkspace(props) {
   var motionOptions = all.filter(function (m) { return m.intent === 'motion'; });
   var mainTitle = h('div',{className:'ck-intake-title'},
     h('div',null,h('div',{className:'ck-eyebrow'},t('intakeKicker')),h('h2',null,t('materials')),h('p',null,t('materialWorkflow'))),
-    h('span',{className:'ck-chip','data-tone':'brand'},t(isDshDesktop()?'materialDesktop':'materialWeb')));
+    h('div',{className:'ck-row'},
+      h('span',{className:'ck-chip','data-tone':'brand'},t(isDshDesktop()?'materialDesktop':'materialWeb')),
+      button('assets',function(){go('assets');},false)));
   var steps = h('div',{className:'ck-material-steps','aria-label':t('materialStage'),role:'group'}, stages.map(function (step) {
     return h('button',{key:step.id,type:'button','aria-pressed':current.id===step.id,onClick:function(){setStep(step.id);}},
       h('span',{className:'ck-step-no','aria-hidden':'true'},stageNo(step)),h('strong',null,step['title'+lang] || step.id),
@@ -136,7 +138,7 @@ function MaterialWorkspace(props) {
   var importBox = !role ? null : card('materialRegister', h(React.Fragment,null,
     selector('materialRole',role.id,stepRoles.map(function (r){return [r.id,rName(r)];}),function(id){studio.put('materialRole',id);}),
     role.intent==='view' ? selector('slotId',form.materialSlot,(boot.requiredViewSlots || []).map(function(v){return [v.id,v['label'+lang] || v.id];}),function(value){studio.put('materialSlot',value);}) : null,
-    role.intent==='candidate' ? selector('part',form.materialPart,['head','body','accessory'].map(function (part){return [part,t(part)];}),function(part){studio.put('materialPart',part);}) : null,
+    role.intent==='candidate' ? selector('part',form.materialPart,['head','body','clothing','hair','accessory'].map(function (part){return [part,t(part)];}),function(part){studio.put('materialPart',part);}) : null,
     h('p',{className:'ck-muted ck-material-help'},role['use'+lang]),
     h('div',{className:'ck-intake-drop','data-dragging':dragging,'data-disabled':busy||!project,onDragOver:function(e){e.preventDefault();if(!busy&&project)setDragging(true);},
       onDragEnter:function(e){e.preventDefault();if(!busy&&project)setDragging(true);},onDragLeave:function(e){if(!e.currentTarget.contains(e.relatedTarget))setDragging(false);},onDrop:dropped},

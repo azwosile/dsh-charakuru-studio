@@ -1,5 +1,5 @@
-# Avatar Studio 0.6.1
+# Avatar Studio 0.7.0
 
-A native DSH workbench with two production routes: rebuild from an illustration, or tailor a trusted, rigged local foundation and fit separately made Tripo parts. An independent render page turns a versioned Blend into a local Eevee still via the DSH conversation. No upstream application is launched, no third-party model is distributed, and cloud execution is off by default.
+A native DSH avatar workbench with two modeling routes (illustration rebuild and base-mesh tailoring), organized into three primary workspaces (Workbench, Render Lab, Asset Library) plus a global Settings Drawer with adaptive light/dark theming and full English/Chinese localization. Includes Tripo dual-channel execution (OpenAPI v3 with budget gates plus 1-to-4-view browser Studio tickets), Blender dual-channel hybrid workflows (`dsh-blender-plugin` contract layer plus Agent Computer-Use GUI `checkout_gui`/`checkin_gui` working copies), all 6 stage review gates, same-machine Web binary upload, and local directory browsing.
 
-Experimental. Structure, appearance, motion and final delivery are separate checks. See the [workflow](WORKBENCH-0.6.1.md), [Windows installation guide](INSTALL-WINDOWS.md), [Blender operations](OPERATIONS.md) and [0.6.0 historical verification](VERIFICATION-0.6.0.md).
+Experimental. Structural checks, local Eevee renders, and human visual approvals are recorded separately. Cloud billing is disabled by default, and no third-party proprietary models are distributed. See the [workbench guide](WORKBENCH-0.6.1.md), [Windows installation guide](INSTALL-WINDOWS.md), [Blender and dual-channel operations](OPERATIONS.md), and [0.7.0 verification report](VERIFICATION-0.7.0.md).

@@ -1,6 +1,6 @@
 {
   "name": "dsh-charakuru-studio",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Avatar Studio: native DeepSeek Harness character workflow, model adapters, human checkpoints and immutable Blender revisions. Experimental; cloud execution off by default.",
   "license": "MIT",
   "author": {

@@ -1,12 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import * as stages from '../lib/blender/cleanroom-scripts.js';
 import { PLUGIN_VERSION } from '../lib/constants.js';
 import { buildQwenLocalDiffusersScript } from '../lib/providers/image-router.js';
 import { compileTurnaroundPromptPack } from '../lib/catalog/aa-image-hub.js';
+import { buildClientSource } from './build-client.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 async function walk(dir) { const out = []; for (const item of await fs.readdir(dir, { withFileTypes: true })) { const p = path.join(dir, item.name); if (item.isDirectory()) out.push(...await walk(p)); else out.push(p); } return out; }
 function run(exe, args) { const res = spawnSync(exe, args, { cwd: root, stdio: 'inherit', timeout: 30000 }); if (res.error) throw res.error; if (res.status !== 0) throw new Error(`Check exited ${res.status}: ${exe}`); }
@@ -18,6 +19,9 @@ for (const rel of ['src/client-shell.js', 'lib/client.js']) {
   const src = await fs.readFile(path.join(root, rel), 'utf8');
   if (!src.includes(`CLIENT_VERSION = '${manifest.version}'`)) throw new Error(`Client version mismatch in ${rel}: expected CLIENT_VERSION = '${manifest.version}'`);
 }
+const expectedClient = await buildClientSource(pathToFileURL(root + path.sep));
+const actualClient = (await fs.readFile(path.join(root, 'lib/client.js'), 'utf8')).replace(/\r\n/g, '\n');
+if (actualClient !== expectedClient) throw new Error('lib/client.js is out of sync with src/* or lib/client-preview.js; run `npm run build:client`');
 for (const p of [manifest.main, manifest.types, manifest.icon, manifest.dsh.bundle.patch, './lib/client.js']) await fs.access(path.resolve(root, p));
 for (const locale of ['en', 'zh']) {
   const raw = await fs.readFile(path.join(root, 'locale', locale + '.json'), 'utf8');

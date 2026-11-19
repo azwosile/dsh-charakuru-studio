@@ -9,30 +9,56 @@ function DeskTripoStudio(props) {
   var part=ticket?.part||(base?form.studioObjectPart:form.deskPart);
   var refs=(project.materials?.items||[]).filter(function(m){return m.role==='tripo_'+part+'_reference';});
   var chosenRef=refs.find(function(m){return m.id===form.studioRefId;});
+  var activeRefIds=base?(Array.isArray(form.studioRefIds)&&form.studioRefIds.length?form.studioRefIds.filter(function(id){return refs.some(function(r){return r.id===id;});}):(chosenRef?[chosenRef.id]:[])).slice(0,4):[];
   var revision=project.stateRevision;
-  var canPlan=base?!!project.workflow.foundation.body&&!!chosenRef:project.stages?.['1_concept']?.status==='completed'&&project.stages?.['2_views']?.status==='completed';
-  var result=state.result?.ticket?.id===ticket?.id&&state.result?.stateRevision===revision?state.result:null;
+  var canPlan=base?!!project.workflow.foundation.body&&activeRefIds.length>=1&&activeRefIds.length<=4:project.stages?.['1_concept']?.status==='completed'&&project.stages?.['2_views']?.status==='completed';
+  var result=state.result?.ticket?.id===ticket?.id&&(state.result?.stateRevision===undefined||state.result?.stateRevision===revision)?state.result:null;
+  var inboxPath=result?.inbox||ticket?.inbox||'';
   var statusLabels={draft:L('待确认上传','Upload not authorized'),upload_authorized:L('已授权指定图片 · 等待实际报价','Upload permitted · waiting for quote'),generation_confirmed:L('已确认报价 · 网页手动生成','Quote confirmed · submit manually'),closed_with_candidates:L('已关闭 · 有本机候选','Closed with local candidates'),closed_without_download:L('已关闭 · 无回执','Closed without download')};
   var target='https://studio.tripo3d.ai/';
   var validCap=form.studioCap.trim()!==''&&Number(form.studioCap)>=0&&Number(form.studioCap)<=1000000;
   var quote=Number(form.studioQuote),quoteOk=form.studioQuote.trim()!==''&&quote>=0&&quote<=ticket?.creditCap;
   function field(name,label,options){return deskField(label,form[name],function(v){studio.put(name,v);},Object.assign({disabled:busy},options));}
-  function make(){studio.action('/studio/tripo/studio/new',{part:part,referenceMaterialId:base?chosenRef?.id:undefined,creditCap:Number(form.studioCap),expectedRevision:revision},true).then(function(r){if(r){studio.put('studioQuote','');studio.put('studioDownload','');}});}
+  function toggleExtraRef(id,checked){
+    var next=activeRefIds.slice();
+    if(checked){if(next.indexOf(id)<0&&next.length<4)next.push(id);}
+    else next=next.filter(function(x){return x!==id;});
+    studio.put('studioRefIds',next);
+    studio.put('studioRefId',next[0]||'');
+  }
+  function make(){studio.action('/studio/tripo/studio/new',{part:part,referenceMaterialId:base?activeRefIds[0]:undefined,referenceMaterialIds:base?activeRefIds:undefined,creditCap:Number(form.studioCap),expectedRevision:revision},true).then(function(r){if(r){studio.put('studioQuote','');studio.put('studioDownload','');}});}
   function transition(action,warning){if(!window.confirm(warning))return;studio.action('/studio/tripo/studio/transition',{ticketId:ticket.id,action:action,expectedRevision:revision,confirmed:true,quotedCredits:action==='confirm_quote'?quote:undefined},true);}
   function status(){studio.action('/studio/tripo/studio/status',{ticketId:ticket.id});}
   function collect(source){studio.action('/studio/tripo/studio/collect',{ticketId:ticket.id,expectedRevision:revision,sourceGlbPath:source||undefined,fileName:source?undefined:form.studioDownload.trim()},true).then(function(r){if(r)studio.put('studioDownload','');});}
-  function chooseFile(file){var source=file&&desktopFilePath(file);if(source)collect(source);else if(file)studio.set({notice:L('此端取不到文件路径；请粘贴路径，或把 GLB 放入工单回收目录后填文件名。','This renderer has no file path. Paste the local path or use the ticket inbox and filename.')});}
+  function chooseFile(file){
+    if(!file)return;
+    var source=desktopFilePath(file);
+    if(source){collect(source);return;}
+    studio.act(async function(){
+      var query=new URLSearchParams({projectDir:boot.activeProjectDir,ticketId:ticket.id,fileName:file.name,expectedRevision:String(revision)});
+      var uploaded=await studio.request('/studio/tripo/studio/upload?'+query.toString(),null,file);
+      await studio.refresh(false);
+      studio.put('studioDownload','');
+      return uploaded;
+    });
+  }
   function draft(){studio.handoffAiEdit('/studio/tripo/studio/handoff',{ticketId:ticket.id},false);}
   return deskCard(L('Tripo 官方浏览器接力','Tripo Studio browser handoff'),h('div',{className:'ck-ai-strip'},
     h('div',{className:'ck-row'},h('a',{className:'ck-btn','data-variant':'primary',href:target,target:'_blank',rel:'noopener noreferrer'},L('在浏览器打开 Tripo Studio ↗','Open Tripo Studio in browser ↗'))),
     h('p',{className:'ck-muted'},L('使用你已登录的浏览器，不在 DSH 内嵌。可让 DSH 的浏览器工具协助读界面、上传已授权图和回收 GLB；没有浏览器工具时，按同一工单手动做。','Use your signed-in browser, not an iframe. A browser tool attached to DSH can help inspect the page, upload the authorized PNGs and collect GLBs. The same ticket works manually without a browser tool.')),
     !ticket?h(React.Fragment,null,
-      deskSelect(L('本次只做一个部件','One part per ticket'),part,parts,function(v){studio.put(base?'studioObjectPart':'deskPart',v);studio.put('studioRefId','');studio.put('deskCandidate','');},busy),
+      deskSelect(L('本次只做一个部件','One part per ticket'),part,parts,function(v){studio.put(base?'studioObjectPart':'deskPart',v);studio.put('studioRefId','');studio.put('studioRefIds',[]);studio.put('deskCandidate','');},busy),
       base?h(React.Fragment,null,
-        deskSelect(L('独立部件参考 PNG','Isolated part reference PNG'),chosenRef?.id||'',[['',L('未选图','No image selected')]].concat(refs.map(function(m){return [m.id,m.fileName+' · '+m.sha256.slice(0,7)];})),function(v){studio.put('studioRefId',v);},busy),
+        deskSelect(L('独立部件参考 PNG（主视图）','Isolated part reference PNG (primary)'),chosenRef?.id||activeRefIds[0]||'',[['',L('未选图','No image selected')]].concat(refs.map(function(m){return [m.id,m.fileName+' · '+m.sha256.slice(0,7)];})),function(v){studio.put('studioRefId',v);studio.put('studioRefIds',v?[v].concat(activeRefIds.filter(function(x){return x!==v;})).slice(0,4):[]);},busy),
+        refs.length>1?h('div',{className:'ck-config-row','aria-label':L('多视角部件参考（1–4 张 PNG）','Multi-view part references (1–4 PNGs)')},
+          h('span',{className:'ck-muted'},L('多视角选择（可勾选 1–4 张同部件正/侧/背 PNG）：','Multi-view selection (check 1–4 front/side/back PNGs for this part):')+' '+activeRefIds.length+' / 4'),
+          h('div',{className:'ck-row'},refs.map(function(m){
+            var checked=activeRefIds.indexOf(m.id)>=0;
+            return h('label',{key:m.id,className:'ck-chip'},h('input',{type:'checkbox',checked:checked,disabled:busy||(!checked&&activeRefIds.length>=4),onChange:function(e){toggleExtraRef(m.id,e.target.checked);}}),' ',m.fileName);
+          }))):null,
         chosenRef?h('img',{className:'ck-ticket-reference',src:studioMaterialUrl(form,boot,chosenRef),alt:chosenRef.fileName,referrerPolicy:'no-referrer'}):null,
         props.register?deskButton(L('登记独立部件 PNG','Register isolated part PNG'),function(){props.register('4_assembly','tripo_'+part+'_reference');},busy):null,
-        h('p',{className:'ck-muted'},L('只使用独立服装、头发或配饰，不发私有身体、头模、Blend 或整套工程。','Use isolated clothing, hair or accessory images only — never private bodies, heads, Blend files or whole projects.'))):
+        h('p',{className:'ck-muted'},L('只使用独立服装、头发或配饰（支持 1–4 张多视角），不发私有身体、头模、Blend 或整套工程。','Use isolated clothing, hair or accessory images only (1–4 views supported) — never private bodies, heads, Blend files or whole projects.'))):
         !canPlan?h('p',{className:'ck-callout'},L('先批准原画与全部拆件视图；每次只从已批准视图取该部件四张。','Approve the original and views first. Each ticket uses the four reviewed PNGs for one part.')):null,
       field('studioCap',L('本工单积分上限（不是余额）','Ticket credit cap (not balance)'),{type:'number',min:0,max:1000000,step:'any'}),
       deskButton(L('新建浏览器工单（不上传）','Create browser ticket (no upload)'),make,busy||!canPlan||!validCap,true)):
@@ -48,9 +74,9 @@ function DeskTripoStudio(props) {
         ticket.status==='upload_authorized'?h('div',{className:'ck-config-row'},field('studioQuote',L('网页显示的本次报价（积分）','Current quote shown in Studio (credits)'),{type:'number',min:0,step:'any'}),
           deskButton(L('确认报价，允许我手动生成一次','Confirm quote for one manual generation'),function(){transition('confirm_quote',L('确认网页对该部件的实际报价是 '+quote+' 积分，且未提交过？请自己到浏览器点一次 Generate；DSH 不会代点。','Confirm the shown quote is '+quote+' credits and it has not been submitted? Click Generate once in the browser; DSH will not click it.'));},busy||!quoteOk||!!result?.blockedReason,true)):null,
         ticket.status==='generation_confirmed'?h('div',{className:'ck-config-row'},
-          h('p',{className:'ck-muted'},L('完成后导出自包含、未压缩 GLB。逐个回收，不自动采用、不自动记账。不确定是否扣费时先查网页历史，不重试。','Export embedded, uncompressed GLBs. Collect them one at a time, without auto-adoption or billing. If a charge is uncertain, check Studio history before retrying.')),
-          result?.inbox?h('p',{className:'ck-meta-line'},L('回收目录：','Inbox: '),h('code',null,result.inbox)):null,
-          isDshDesktop()?h('label',{className:'ck-field'},h('span',null,L('选择浏览器下载的 GLB','Choose downloaded GLB')),h('input',{type:'file',accept:'.glb',disabled:busy,onChange:function(e){chooseFile(e.target.files?.[0]);e.target.value='';}})):null,
+          h('p',{className:'ck-muted'},L('完成后导出自包含 GLB（或 FBX 自动转档）。逐个回收，不自动采用、不自动记账。不确定是否扣费时先查网页历史，不重试。','Export embedded GLBs (or FBX for automatic conversion). Collect them one at a time, without auto-adoption or billing. If a charge is uncertain, check Studio history before retrying.')),
+          inboxPath?h('p',{className:'ck-meta-line'},L('回收目录：','Inbox: '),h('code',null,inboxPath)):null,
+          h('label',{className:'ck-field'},h('span',null,L('选择浏览器下载的 GLB / FBX','Choose downloaded GLB / FBX')),h('input',{type:'file',accept:'.glb,.fbx',disabled:busy,onChange:function(e){chooseFile(e.target.files?.[0]);e.target.value='';}})),
           field('studioDownload',L('GLB 本机绝对路径，或回收目录中的文件名','GLB absolute path, or filename in the inbox'),{maxLength:4096}),
           deskButton(L('回收为候选（不采用）','Collect a candidate (do not adopt)'),function(){var s=form.studioDownload.trim();collect(/[\\/]/.test(s)?s:'');},busy||!form.studioDownload.trim(),true),
           h('ul',{className:'ck-paths'},ticket.downloads.map(function(d){return h('li',{key:d.id},d.fileName+' · '+d.sha256.slice(0,10));}))):null,

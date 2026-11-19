@@ -21,20 +21,61 @@ function DeskHandoffCopy(props) {
   var r=props.result,L=function(z,e){return deskText(props.lang,z,e);};
   if(!r?.instruction||r.draftOutcome==='ok')return null;
   return h('details',{className:'ck-inline-details'},h('summary',null,L('手动复制 DSH 会话草稿','Copy the DSH draft manually')),
-    h('pre',{className:'ck-pre'},r.instruction),deskButton(L('复制草稿','Copy draft'),function(){if(props.studio.copy(r.instruction))props.studio.set({notice:props.studio.t('copied')});},props.disabled));
+    h('pre',{className:'ck-pre'},r.instruction),deskButton(L('复制草稿','Copy draft'),function(){props.studio.copy(r.instruction);},props.disabled));
+}
+function DeskBlenderChannelControls(props) {
+  var studio=props.studio,state=props.state,project=props.projectState,revision=props.revision,form=state.form;
+  var L=function(z,e){return deskText(props.lang,z,e);};
+  if(!project)return null;
+  var editor=project.editor||{};
+  var channelPref=editor.channelPreference||form.blenderChannel||'auto';
+  var guiCheckout=editor.guiCheckout&&editor.guiCheckout.status==='checked_out'?editor.guiCheckout:null;
+  var locked=state.busy||!!editor.pendingJob||props.disabled;
+  function setChannel(v){
+    studio.put('blenderChannel',v);
+    studio.action('/studio/editor/channel',{channelPreference:v,expectedRevision:project.stateRevision},true);
+  }
+  function checkoutGui(){
+    studio.action('/studio/editor/gui-checkout',{expectedRevisionId:revision.id,note:(form.guiCheckoutNote||'').trim()||undefined},true);
+  }
+  function checkinGui(){
+    studio.action('/studio/editor/gui-checkin',{checkoutId:guiCheckout.id,expectedRevisionId:revision.id,exportVrm:!!form.guiExportVrm},true);
+  }
+  function abortGui(){
+    studio.action('/studio/editor/gui-abort',{checkoutId:guiCheckout.id,expectedRevisionId:revision.id},true);
+  }
+  return h('div',{className:'ck-config-row','data-blender-channels':'true'},
+    deskSelect(L('Blender 通道偏好','Blender channel preference'),channelPref,[
+      ['auto',L('自动择优（插件 / GUI 混合）','Auto select (plugin / GUI hybrid)')],
+      ['plugin',L('dsh-blender-plugin 契约','dsh-blender-plugin contract')],
+      ['computer_use',L('Computer-Use GUI 操控','Computer-Use GUI')]
+    ],setChannel,state.busy||!!editor.pendingJob),
+    revision?h('div',{className:'ck-config-row'},
+      guiCheckout?h(React.Fragment,null,
+        h('p',{className:'ck-callout'},L('GUI 工作副本已签出：','GUI working copy checked out: '),h('code',null,guiCheckout.workingBlendPath||guiCheckout.id.slice(0,8))),
+        h('label',{className:'ck-row'},h('input',{type:'checkbox',checked:!!form.guiExportVrm,disabled:locked,onChange:function(e){studio.put('guiExportVrm',e.target.checked);}}),L('签入时导出 VRM','Export VRM on checkin')),
+        h('div',{className:'ck-row'},
+          deskButton(L('签入 GUI 修订','Check in GUI revision'),checkinGui,locked,true),
+          deskButton(L('放弃 GUI 签出','Abort GUI checkout'),abortGui,locked))):
+        h('div',{className:'ck-row'},
+          deskButton(L('签出 GUI 工作副本','Check out GUI working copy'),checkoutGui,locked||!revision))):null);
 }
 function DeskAiJob(props) {
   var studio=props.studio,state=props.state,project=props.projectState,revision=props.revision,intent=props.intent||'general',form=state.form;
-  var L=function(z,e){return deskText(props.lang,z,e);};var disabled=state.busy||!!project.editor?.pendingJob||props.disabled;
+  var L=function(z,e){return deskText(props.lang,z,e);};
+  var guiCheckedOut=project.editor?.guiCheckout?.status==='checked_out';
+  var disabled=state.busy||!!project.editor?.pendingJob||props.disabled;
+  var channelPref=project.editor?.channelPreference||form.blenderChannel||'auto';
   var brief=form.deskAiBriefs[intent]===undefined?(props.defaultBrief||''):form.deskAiBriefs[intent];
   var needsReview=(project.editor?.requests||[]).some(function(r){return r.status==='ready_for_review'&&r.resultRevisionId===revision?.id;});
   var requests=(project.editor?.requests||[]).filter(function(r){return props.showAll||(r.intent||'general')===intent;}).slice(-4).reverse();
-  function draft(){studio.handoffAiEdit('/studio/editor/ai-request',{prompt:brief,objects:props.objects||[],camera:form.editorCamera||'front',expectedRevisionId:revision.id,intent:intent},true);}
+  function draft(){studio.handoffAiEdit('/studio/editor/ai-request',{prompt:brief,objects:props.objects||[],camera:form.editorCamera||'front',expectedRevisionId:revision.id,intent:intent,channelPreference:channelPref},true);}
   return deskCard(props.title||L('AI 建模接力','AI modeling handoff'),h('div',{className:'ck-ai-strip'},
     props.info?h('p',{className:'ck-muted'},props.info):null,
     !revision||props.disabled?h('p',{className:'ck-callout'},props.missing||L('先打开本项目当前要编辑的 Blender 修订。','Open the Blender revision you intend to edit.')):null,
-    deskField(L('告诉 AI 想改成什么样','Describe the change to the AI'),brief,function(v){studio.put('deskAiBriefs',Object.assign({},form.deskAiBriefs,{[intent]:v}));},{multiline:true,maxLength:8000,placeholder:props.placeholder,disabled:disabled||!revision||needsReview}),
-    deskButton(props.button||L('交给 DSH 中的 AI','Draft for AI in DSH'),draft,disabled||!revision||needsReview||!brief.trim(),true),
+    h(DeskBlenderChannelControls,{studio:studio,state:state,projectState:project,revision:revision,lang:props.lang,disabled:props.disabled||needsReview}),
+    deskField(L('告诉 AI 想改成什么样','Describe the change to the AI'),brief,function(v){studio.put('deskAiBriefs',Object.assign({},form.deskAiBriefs,{[intent]:v}));},{multiline:true,maxLength:8000,placeholder:props.placeholder,disabled:disabled||!revision||needsReview||guiCheckedOut}),
+    deskButton(props.button||L('交给 DSH 中的 AI','Draft for AI in DSH'),draft,disabled||!revision||needsReview||guiCheckedOut||!brief.trim(),true),
     h('p',{className:'ck-muted'},L('你写需求，AI 决定对象与参数并生成新修订。会话草稿需要你发送，出稿后再人工审阅。','Describe the goal. The agent chooses objects and parameters and creates a new revision. Send the draft and review the result yourself.')),
     requests.map(function(r){var ready=r.status==='ready_for_review'&&r.resultRevisionId===revision?.id;var active=r.status==='requested'&&r.baseRevisionId===revision?.id;
       function review(decision){studio.action('/studio/editor/ai-review',{requestId:r.id,revisionId:revision.id,decision:decision},true);}
@@ -99,7 +140,10 @@ function WorkbenchWorkspace(props) {
   function localField(key,label,opts) {return deskField(label,form[key],function(v){studio.put(key,v);},Object.assign({disabled:busy},opts));}
   var selectedRoute=project?route:form.deskInitialMode;
   var header=h('header',{className:'ck-desk-head'},h('div',null,h('div',{className:'ck-eyebrow'},'DSH / AVATAR STUDIO'),h('h2',null,L('角色制作工作台','Character workbench')),h('p',null,project?project.projectName:L('先打开项目目录，再创建或选择制作路线。','Open a project folder, then choose your production route.'))),
-    h('div',{className:'ck-row'},deskButton(L('项目文件','Project files'),props.openSettings,false),project?deskButton(L('渲染台 ↗','Render studio ↗'),function(){go('render');},false):null));
+    h('div',{className:'ck-row'},
+      deskButton(L('独立渲染台 ↗','Render Lab ↗'),function(){go('render');},!project),
+      deskButton(L('资产与素材库','Assets & Materials'),function(){go('materials');},false),
+      deskButton(L('⚙ 全局设置','⚙ Global Settings'),props.openSettings,false)));
   var modeTabs=h('div',{className:'ck-desk-modes',role:'group','aria-label':L('制作路线','Production route')},
     [['illustration','01',L('原画重建','Illustration rebuild'),L('四视图 · 候选 · 装配','Views · candidates · assembly')],['base_mesh','02',L('素体改型','Base mesh tailoring'),L('沿用拓扑 · Tripo 衣 / 发 / 饰','Keep topology · Tripo parts')]].map(function(x){return h('button',{type:'button',key:x[0],'aria-pressed':selectedRoute===x[0],disabled:busy||running,onClick:function(){mode(x[0]);}},h('span',null,x[1]),h('strong',null,x[2]),h('small',null,x[3]));}));
   var setup=h(React.Fragment,null,localField('prompt',L('角色与验收目标','Character brief'),{multiline:true,id:'workbench-f-prompt'}),

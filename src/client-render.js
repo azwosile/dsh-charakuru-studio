@@ -30,7 +30,10 @@ function RenderWorkspace(props) {
   }
   function collectBrief(){
     var brief=L('请在原提交的 DSH 会话，用 charakuru_render 收集本机渲染。不要重发。','Collect this local render in the original DSH session with charakuru_render; do not resubmit.')+'\n'+JSON.stringify({action:'collect',projectDir:boot.activeProjectDir,requestId:selected.id});
-    if(studio.insertInstructions(brief)!=='ok') {if(studio.copy(brief))studio.set({notice:studio.t('copied')});else studio.set({error:studio.t('noSession')});}
+    if(studio.insertInstructions(brief)!=='ok') {
+      studio.set({lastDraft:{id:selected.id,instruction:brief,draftOutcome:'unsupported'}});
+      studio.copy(brief);
+    }
   }
   function review(decision){studio.action('/studio/render/review',{requestId:selected.id,expectedRevisionId:active.id,decision:decision,note:form.deskRenderNote},true);}
   var header=h('header',{className:'ck-desk-head ck-render-head'},h('div',null,
