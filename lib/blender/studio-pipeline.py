@@ -1,7 +1,7 @@
 # Original Blender editor / production operations. COMMAND is injected as a JSON string.
 # Never executes text supplied by a model. Opens input with script autoexecution disabled.
 import bpy, json, math, os, sys, traceback, uuid
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Euler
 
 C = json.loads(COMMAND)
 P = C['params']
@@ -12,17 +12,38 @@ def require(condition, message):
     if not condition:
         raise RuntimeError(message)
 
-def enable_vrm():
+def enable_vrm(required=False):
     import addon_utils
     root = P.get('vrmAddonPath')
-    module = P.get('vrmAddonModule', 'VRM_Addon_for_Blender-release')
     if root:
         require(os.path.isdir(root), 'VRM add-on search path does not exist')
         if root not in sys.path:
             sys.path.insert(0, root)
-    if not hasattr(bpy.types.Armature, 'vrm_addon_extension'):
-        addon_utils.enable(module, default_set=True, persistent=True)  # In-memory preferences only; never save_userpref()
-    require(hasattr(bpy.types.Armature, 'vrm_addon_extension'), 'VRM Add-on unavailable; install a compatible official add-on or configure its local path')
+    if hasattr(bpy.types.Armature, 'vrm_addon_extension'):
+        return True
+    candidates = []
+    if P.get('vrmAddonModule'):
+        candidates.append(P['vrmAddonModule'])
+    for name in ('bl_ext.user_default.vrm', 'bl_ext.blender_org.vrm', 'io_scene_vrm', 'VRM_Addon_for_Blender-release'):
+        if name not in candidates:
+            candidates.append(name)
+    try:
+        for mod in addon_utils.modules():
+            name = getattr(mod, '__name__', '')
+            if 'vrm' in name.lower() and name not in candidates:
+                candidates.append(name)
+    except Exception:
+        pass
+    for mod_name in candidates:
+        try:
+            addon_utils.enable(mod_name, default_set=True, persistent=True)  # In-memory preferences only; never save_userpref()
+            if hasattr(bpy.types.Armature, 'vrm_addon_extension'):
+                return True
+        except Exception:
+            continue
+    if required:
+        require(hasattr(bpy.types.Armature, 'vrm_addon_extension'), 'VRM Add-on unavailable; install a compatible official add-on or configure its local path')
+    return hasattr(bpy.types.Armature, 'vrm_addon_extension')
 
 def rig():
     found = bpy.data.objects.get(P.get('armature', ''))
@@ -46,7 +67,7 @@ def select_export():
         bpy.context.view_layer.objects.active = next((o for o in selected if o.type == 'ARMATURE'), selected[0])
 
 def configure_vrm():
-    enable_vrm()
+    enable_vrm(required=True)
     arm = rig()
     ext = arm.data.vrm_addon_extension
     ext.spec_version = '1.0'
@@ -133,39 +154,50 @@ def transfer_weights():
     source=bpy.data.objects.get(P.get('sourceMesh',''))
     require(source is not None and source.type=='MESH', 'Choose an explicit weighted source mesh')
     require(P.get('objects') and source.name not in P['objects'], 'Choose distinct target meshes')
-    source.data.calc_loop_triangles()
-    triangles=[tuple(t.vertices) for t in source.data.loop_triangles]
-    vertices=[source.matrix_world @ v.co for v in source.data.vertices]
-    tree=BVHTree.FromPolygons(vertices,triangles,all_triangles=True)
-    bone_groups={g.index:g.name for g in source.vertex_groups if g.name in arm.data.bones and arm.data.bones[g.name].use_deform}
-    maximum=float(P.get('maxTransferDistance',0.25))
-    for name in P['objects']:
-        target=bpy.data.objects.get(name)
-        require(target is not None and target.type=='MESH','Unknown weight target '+name)
-        groups={name:(target.vertex_groups.get(name) or target.vertex_groups.new(name=name)) for name in bone_groups.values()}
-        for vertex in target.data.vertices:
-            point=target.matrix_world @ vertex.co
-            hit,normal,index,distance=tree.find_nearest(point)
-            require(hit is not None and distance<=maximum,f'Weight transfer too far: {target.name}:{vertex.index} distance={distance}; increase explicit bound only after review')
-            ia,ib,ic=triangles[index];a,b,c=vertices[ia],vertices[ib],vertices[ic]
-            ab,ac,ap=b-a,c-a,hit-a;d00=ab.dot(ab);d01=ab.dot(ac);d11=ac.dot(ac);d20=ap.dot(ab);d21=ap.dot(ac);den=d00*d11-d01*d01
-            if abs(den)<1e-15:coeff=[1,0,0]
-            else:
-                v=(d11*d20-d01*d21)/den;w=(d00*d21-d01*d20)/den;coeff=[max(0,1-v-w),max(0,v),max(0,w)]
-            weights={}
-            for vi,weight in zip((ia,ib,ic),coeff):
-                for membership in source.data.vertices[vi].groups:
-                    if membership.group in bone_groups:
-                        name=bone_groups[membership.group];weights[name]=weights.get(name,0)+membership.weight*weight
-            total=sum(weights.values());require(total>1e-6,'Source triangle has no deform weights')
-            for group in target.vertex_groups:
-                if group.name in arm.data.bones and arm.data.bones[group.name].use_deform:group.remove([vertex.index])
-            for name,weight in weights.items():
-                if weight>1e-7:groups[name].add([vertex.index],weight/total,'REPLACE')
-        modifiers=[m for m in target.modifiers if m.type=='ARMATURE']
-        require(len(modifiers)<=1,'Multiple armature modifiers require manual review')
-        modifier=modifiers[0] if modifiers else target.modifiers.new('AvatarStudioArmature','ARMATURE')
-        modifier.object=arm
+    deps=bpy.context.evaluated_depsgraph_get()
+    eval_src=source.evaluated_get(deps)
+    src_mesh=eval_src.to_mesh()
+    try:
+        src_mesh.calc_loop_triangles()
+        triangles=[tuple(t.vertices) for t in src_mesh.loop_triangles]
+        vertices=[eval_src.matrix_world @ v.co for v in src_mesh.vertices]
+        tree=BVHTree.FromPolygons(vertices,triangles,all_triangles=True)
+        bone_groups={g.index:g.name for g in source.vertex_groups if g.name in arm.data.bones and arm.data.bones[g.name].use_deform}
+        maximum=float(P.get('maxTransferDistance',0.25))
+        src_verts=src_mesh.vertices if len(src_mesh.vertices)==len(source.data.vertices) else source.data.vertices
+        for name in P['objects']:
+            target=bpy.data.objects.get(name)
+            require(target is not None and target.type=='MESH','Unknown weight target '+name)
+            groups={name:(target.vertex_groups.get(name) or target.vertex_groups.new(name=name)) for name in bone_groups.values()}
+            for vertex in target.data.vertices:
+                point=target.matrix_world @ vertex.co
+                hit,normal,index,distance=tree.find_nearest(point)
+                require(hit is not None and distance<=maximum,f'Weight transfer too far: {target.name}:{vertex.index} distance={distance}; increase explicit bound only after review')
+                ia,ib,ic=triangles[index];a,b,c=vertices[ia],vertices[ib],vertices[ic]
+                ab,ac,ap=b-a,c-a,hit-a;d00=ab.dot(ab);d01=ab.dot(ac);d11=ac.dot(ac);d20=ap.dot(ab);d21=ap.dot(ac);den=d00*d11-d01*d01
+                if abs(den)<1e-15:coeff=[1,0,0]
+                else:
+                    v=(d11*d20-d01*d21)/den;w=(d00*d21-d01*d20)/den;coeff=[max(0,1-v-w),max(0,v),max(0,w)]
+                weights={}
+                for vi,weight in zip((ia,ib,ic),coeff):
+                    v_groups=src_verts[vi].groups if src_verts[vi].groups else source.data.vertices[vi].groups
+                    for membership in v_groups:
+                        if membership.group in bone_groups:
+                            bname=bone_groups[membership.group];weights[bname]=weights.get(bname,0)+membership.weight*weight
+                top_weights=sorted([(bname,w) for bname,w in weights.items() if w>1e-7],key=lambda item:item[1],reverse=True)[:4]
+                total=sum(w for _,w in top_weights);require(total>1e-6,'Source triangle has no deform weights')
+                for group in target.vertex_groups:
+                    if group.name in arm.data.bones and arm.data.bones[group.name].use_deform:group.remove([vertex.index])
+                for bname,weight in top_weights:
+                    groups[bname].add([vertex.index],weight/total,'REPLACE')
+            if target.parent is None:
+                target.parent=arm
+            modifiers=[m for m in target.modifiers if m.type=='ARMATURE']
+            require(len(modifiers)<=1,'Multiple armature modifiers require manual review')
+            modifier=modifiers[0] if modifiers else target.modifiers.new('AvatarStudioArmature','ARMATURE')
+            modifier.object=arm
+    finally:
+        eval_src.to_mesh_clear()
     notes.append('Explicit surface-interpolated weights from '+source.name+'; no anatomical or collision quality claim. Source mesh unchanged.')
 
 def make_skirt(arm, spec):
@@ -229,7 +261,7 @@ def make_skirt(arm, spec):
     return chains
 
 def spring_setup():
-    enable_vrm()
+    enable_vrm(required=True)
     arm=rig()
     sb=arm.data.vrm_addon_extension.spring_bone1
     require(not sb.springs and not sb.colliders, 'Spring configuration already exists; use a prior revision or edit explicitly in Blender')
@@ -394,8 +426,16 @@ def append_foundation_head():
     # This is rigid head-follow fit, not facial bone or eye weight retargeting.
     shift=Vector(P.get('translation',(0,0,0)))
     scale=P.get('scale',(1,1,1))
-    pivot=arm.matrix_world @ arm.data.bones[bind].head_local
-    fit=Matrix.Translation(pivot+shift) @ Matrix.Diagonal((*scale,1)) @ Matrix.Translation(-pivot)
+    rot_deg=P.get('rotation',(0,0,0))
+    rot_mat=Euler([math.radians(float(a)) for a in rot_deg],'XYZ').to_matrix().to_4x4()
+    donor_coords=[obj.matrix_world @ Vector(c) for obj in meshes for c in obj.bound_box]
+    if donor_coords:
+        d_min=Vector((min(p.x for p in donor_coords),min(p.y for p in donor_coords),min(p.z for p in donor_coords)))
+        d_max=Vector((max(p.x for p in donor_coords),max(p.y for p in donor_coords),max(p.z for p in donor_coords)))
+        pivot=(d_min+d_max)*0.5
+    else:
+        pivot=arm.matrix_world @ arm.data.bones[bind].head_local
+    fit=Matrix.Translation(pivot+shift) @ rot_mat @ Matrix.Diagonal((*scale,1)) @ Matrix.Translation(-pivot)
     for obj in meshes:
         world=fit @ obj.matrix_world.copy()
         for mod in list(obj.modifiers):
@@ -469,13 +509,21 @@ def audit():
             continue
         row={'name':obj.name,'type':obj.type,'helper':obj not in visible_meshes() if obj.type=='MESH' else False,'dimensions':list(obj.dimensions),'location':list(obj.location),'scale':list(obj.scale)}
         if obj.type=='MESH':
+            rigid_bone_parent = (
+                obj.parent_type == 'BONE'
+                and obj.parent is not None
+                and obj.parent.type == 'ARMATURE'
+                and obj.parent_bone in obj.parent.data.bones
+                and not any(m.type == 'ARMATURE' for m in obj.modifiers)
+            )
             deform={g.index for g in obj.vertex_groups if any(a.type=='ARMATURE' and g.name in a.data.bones and a.data.bones[g.name].use_deform for a in bpy.context.scene.objects)}
             unweighted=0
             not_normalized=0
-            for v in obj.data.vertices:
-                total=sum(g.weight for g in v.groups if g.group in deform)
-                unweighted+=int(total<0.00001)
-                not_normalized+=int(abs(total-1)>0.01)
+            if not rigid_bone_parent:
+                for v in obj.data.vertices:
+                    total=sum(g.weight for g in v.groups if g.group in deform)
+                    unweighted+=int(total<0.00001)
+                    not_normalized+=int(abs(total-1)>0.01)
             keys=obj.data.shape_keys
             row['shapeKeyCount']=len(keys.key_blocks)-1 if keys else 0
             row['shapeKeys']=([{'name':k.name,'value':round(k.value,4)} for k in keys.key_blocks if k!=keys.reference_key][:80] if keys else [])
@@ -521,8 +569,8 @@ def pose_check():
     notes.append('Deformation finite-value probe angles='+str(frames)+'. This is not a visual collision or gait acceptance test.')
 
 try:
-    if P.get('vrmAddonPath') or C['operation'] in {'configure_vrm','spring_setup','export_vrm'}:
-        enable_vrm()
+    vrm_required = bool(P.get('vrmAddonPath') or C['operation'] in {'configure_vrm','spring_setup','export_vrm'})
+    enable_vrm(required=vrm_required)
     bpy.ops.wm.open_mainfile(filepath=C['inputBlend'],load_ui=False,use_scripts=False)
     if bpy.context.object and bpy.context.object.mode!='OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -530,10 +578,18 @@ try:
     if operation=='head_scale':
         head_scale()
     elif operation=='transform':
+        rot_deg=P.get('rotation',[0,0,0])
+        has_rot=any(abs(float(a))>1e-9 for a in rot_deg)
+        rot_euler=Euler([math.radians(float(a)) for a in rot_deg],'XYZ')
         for name in P['objects']:
             obj=bpy.data.objects.get(name)
             require(obj is not None and obj.type=='MESH','Explicit mesh selection required: '+name)
             obj.scale=Vector([a*b for a,b in zip(obj.scale,P.get('scale',[1,1,1]))])
+            if has_rot:
+                if obj.rotation_mode!='XYZ':
+                    obj.rotation_euler=obj.rotation_euler.to_matrix().to_euler('XYZ')
+                    obj.rotation_mode='XYZ'
+                obj.rotation_euler.rotate(rot_euler)
             obj.location+=Vector(P.get('translation',[0,0,0]))
     elif operation=='fit_foundation':
         fit_foundation()

@@ -49,6 +49,12 @@ test('P0 Gateway queue submit/collect maps to actual upstream contract', async (
   const collected=await collectCompanionJob({...gateway,jobId:receipt.jobId,caller},{caller,fetchImpl});
   assert.equal(collected.pending,false);assert.equal(collected.receipt.resultJson.verdict,'degraded');assert.equal(posted[1].body.op,'collect');
   await assert.rejects(collectCompanionJob({...gateway,jobId:receipt.jobId,caller},{caller:{...caller,agentId:'foreign'},fetchImpl}),/submitting/);
+  for (const state of ['killed', 'stale', 'unknown']) {
+    const term = await collectCompanionJob({ ...gateway, jobId: 'job-term', caller }, { caller, fetchImpl: async () => Response.json({ ok: true, job: { id: 'job-term', state } }) });
+    assert.equal(term.pending, false);
+    assert.equal(term.failed, true);
+    assert.equal(term.receipt.ok, false);
+  }
 });
 
 test('P0 Gateway GUI preserves ownership headers and explicit py/session gate', async () => {
@@ -128,6 +134,10 @@ test('P1 candidates are not automatically selected and external resources cannot
   assert.equal(inspectGlb(glb()).renderable,false);assert.equal(inspectGlb(triangleGlb()).renderable,true);
   const a=await importStudioAsset({projectDir:dir,kind:'glb',part:'head',dataBase64:triangleGlb().toString('base64')});
   assert.equal(a.projectState.assets.selected.head,undefined);
+  for(const part of ['clothing','hair']){
+    const extra=await importStudioAsset({projectDir:dir,kind:'glb',part,dataBase64:triangleGlb().toString('base64')});
+    assert.equal(extra.asset.part,part);
+  }
   await selectStudioAsset({projectDir:dir,assetId:a.asset.id});
   assert.equal((await loadProjectState(dir)).state.assets.selected.head,a.asset.id);
   await assert.rejects(collectReviewEvidence(dir,(await loadProjectState(dir)).state,'3_tripo'),/body/);
@@ -150,6 +160,12 @@ test('desktop HTTP session token, exact allowed origin and asset-ID access', asy
   const server=await startStudioHttpServer({port:0,config:{registryFile:path.join(dir,'recent.json'),allowedOrigins:['http://127.0.0.1:55555']}});t.after(()=>server.close());
   const token=(await(await fetch(server.baseUrl+'/studio/session')).json()).sessionToken;
   assert.equal((await fetch(server.baseUrl+'/studio/session',{headers:{Origin:'http://127.0.0.1:55556'}})).status,403);
+  assert.equal((await fetch(server.baseUrl+'/studio/session',{headers:{Origin:'http://localhost:55556'}})).status,403);
+  for(const eq of ['http://localhost:55555','http://[::1]:55555']){
+    const ok=await fetch(server.baseUrl+'/studio/session',{headers:{Origin:eq}});
+    assert.equal(ok.status,200);
+    assert.equal(ok.headers.get('Access-Control-Allow-Origin'),eq);
+  }
   assert.equal((await fetch(server.baseUrl+'/studio/assets/import',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,403);
   const assetUrl=server.baseUrl+'/studio/assets/content?projectDir='+encodeURIComponent(dir)+'&id='+a.asset.id;
   assert.equal((await fetch(assetUrl)).status,403);
@@ -168,7 +184,10 @@ test('P0 queue integration prevents duplicate submits and requires fingerprinted
   assert.equal(result.verdict,'degraded');assert.equal((await loadProjectState(dir)).state.blenderState.activeBlendFile,null);
   await assert.rejects(runBlenderAvatarStage({projectDir:dir,executeViaPlugin:true,caller,fetchImpl}),/未收集/);
   await assert.rejects(collectBlenderAvatarJob({projectDir:dir,caller,fetchImpl}),/ENOENT/);
-  await fs.writeFile(blend,'BLENDER-v500fixture');const collected=await collectBlenderAvatarJob({projectDir:dir,caller,fetchImpl});assert.equal(collected.artifacts.length,1);assert.equal((await loadProjectState(dir)).state.blenderState.pendingJob,null);
+  assert.equal((await loadProjectState(dir)).state.blenderState.pendingJob,null,'failed post-collect validation clears pendingJob');
+  await fs.writeFile(blend,'BLENDER-v500fixture');
+  await runBlenderAvatarStage({projectDir:dir,blenderPluginUrl:gateway.baseUrl,executeViaPlugin:true,caller,params:{outputBlendPath:blend},fetchImpl});
+  const collected=await collectBlenderAvatarJob({projectDir:dir,caller,fetchImpl});assert.equal(collected.artifacts.length,1);assert.equal((await loadProjectState(dir)).state.blenderState.pendingJob,null);
 });
 
 test('P1 model execution refuses unapproved inputs even when companion reports success', async t => {
@@ -189,6 +208,32 @@ test('Electron desktop exact dsh-app origin is supported without accepting opaqu
   const r=await fetch(srv.baseUrl+'/health',{headers:{Origin:'dsh-app://app'}});assert.equal(r.status,200);assert.equal(r.headers.get('Access-Control-Allow-Origin'),'dsh-app://app');
   for(const origin of ['null','dsh-app://evil','file://','https://evil.test'])assert.equal((await fetch(srv.baseUrl+'/health',{headers:{Origin:origin}})).status,403);
   const preflight=await fetch(srv.baseUrl+'/studio/assets/import',{method:'OPTIONS',headers:{Origin:'dsh-app://app','Access-Control-Request-Headers':'X-Charakuru-Session,Content-Type'}});assert.equal(preflight.status,204);
+  const desktopOnly=await startStudioHttpServer({port:0,config:{registryFile:path.join(dir,'recent2.json'),allowedOrigins:['dsh-app://app']}});t.after(()=>desktopOnly.close());
+  for(const web of ['http://127.0.0.1:51886','http://localhost:51886','http://[::1]:51886']){
+    const res=await fetch(desktopOnly.baseUrl+'/health',{headers:{Origin:web}});
+    assert.equal(res.status,200);
+    assert.equal(res.headers.get('Access-Control-Allow-Origin'),web);
+  }
+  assert.equal((await fetch(desktopOnly.baseUrl+'/health',{headers:{Origin:'https://evil.test'}})).status,403);
+});
+
+test('P0-6: binary ZIP .charakit sidecar detection, narrow proportion invalidation, and Stage 4 active revision evidence', async t => {
+  const zipDir = await tempProject(t);
+  await fs.writeFile(path.join(zipDir, 'project.charakit'), Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]));
+  const zipLoaded = await loadProjectState(zipDir);
+  assert.equal(zipLoaded.legacyDetected, true);
+  assert.equal(zipLoaded.exists, false);
+
+  const dir = await tempProject(t);
+  await initOrUpdateProject(dir, { characterPrompt: 'Proportion test character' });
+  await image(dir, 'head_front');
+  await approve(dir);
+  assert.equal((await loadProjectState(dir)).state.stages['1_concept'].status, 'completed');
+  assert.equal((await loadProjectState(dir)).state.views.head_front.status, 'ready');
+  await initOrUpdateProject(dir, { headBodyRatio: 6.8, neckScaleFactor: 0.92 });
+  const afterProp = (await loadProjectState(dir)).state;
+  assert.equal(afterProp.stages['1_concept'].status, 'completed');
+  assert.equal(afterProp.views.head_front.status, 'ready');
 });
 
 test('real 3.0.6 headless envelope is unwrapped before structured stage validation', async()=>{

@@ -19,7 +19,7 @@ window.__ModuleLoader__.load({
     var PANEL_ID = 'charakuru-studio';
     var SIDEBAR_ORDER = 20;
     var TABS = ['pipeline', 'assets', 'editor', 'render', 'materials', 'models', 'tripo', 'blender', 'credentials'];
-    var CLIENT_VERSION = '__STUDIO_PACKAGE_VERSION__';
+    var CLIENT_VERSION = '0.6.2';
     var TIMEOUT_FAST = 15000;
     var TIMEOUT_SLOW = 300000;
 
@@ -422,7 +422,7 @@ window.__ModuleLoader__.load({
      * @returns {object} form state.
      */
     function createForm(config) {
-      var activeProject='', base='http://127.0.0.1:'+(config.port || 9886);
+      var activeProject='', base='http://127.0.0.1:'+((typeof window !== 'undefined' && window.__DSH_CHARAKURU_PORT__) || config.port || 9886);
       try {
         activeProject=localStorage.getItem('avatar-studio-active-project') || '';
         var saved=localStorage.getItem('avatar-studio-loopback');
@@ -653,7 +653,7 @@ window.__ModuleLoader__.load({
 
       function copy(text) {
         if (typeof navigator === 'undefined' || !navigator.clipboard || !navigator.clipboard.writeText) return false;
-        try { void navigator.clipboard.writeText(text); return true; } catch (error) { return false; }
+        try { void navigator.clipboard.writeText(text).catch(function () {}); return true; } catch (error) { return false; }
       }
 
       function dispose() {

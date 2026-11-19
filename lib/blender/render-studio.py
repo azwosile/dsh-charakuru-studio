@@ -1,5 +1,5 @@
 # Fixed local renderer. COMMAND is injected by the host; never evaluate a user's brief or code.
-import bpy, json, math, os, traceback
+import bpy, json, math, os, sys, traceback
 from mathutils import Vector
 
 C=json.loads(COMMAND)
@@ -10,6 +10,40 @@ D=C['output']
 def require(ok,message):
     if not ok:
         raise RuntimeError(message)
+
+def enable_vrm(required=False):
+    import addon_utils
+    root = P.get('vrmAddonPath') or C.get('vrmAddonPath')
+    if root:
+        require(os.path.isdir(root), 'VRM add-on search path does not exist')
+        if root not in sys.path:
+            sys.path.insert(0, root)
+    if hasattr(bpy.types.Armature, 'vrm_addon_extension'):
+        return True
+    candidates = []
+    mod_hint = P.get('vrmAddonModule') or C.get('vrmAddonModule')
+    if mod_hint:
+        candidates.append(mod_hint)
+    for name in ('bl_ext.user_default.vrm', 'bl_ext.blender_org.vrm', 'io_scene_vrm', 'VRM_Addon_for_Blender-release'):
+        if name not in candidates:
+            candidates.append(name)
+    try:
+        for mod in addon_utils.modules():
+            name = getattr(mod, '__name__', '')
+            if 'vrm' in name.lower() and name not in candidates:
+                candidates.append(name)
+    except Exception:
+        pass
+    for mod_name in candidates:
+        try:
+            addon_utils.enable(mod_name, default_set=True, persistent=True)
+            if hasattr(bpy.types.Armature, 'vrm_addon_extension'):
+                return True
+        except Exception:
+            continue
+    if required:
+        require(hasattr(bpy.types.Armature, 'vrm_addon_extension'), 'VRM Add-on unavailable; install a compatible official add-on or configure its local path')
+    return hasattr(bpy.types.Armature, 'vrm_addon_extension')
 
 
 def add_area(scene,name,position,look_at,power,color,size):
@@ -67,6 +101,7 @@ def make_toon(mat):
 
 
 def render():
+    enable_vrm(required=bool(P.get('vrmAddonPath') or C.get('vrmAddonPath')))
     bpy.ops.wm.open_mainfile(filepath=C['inputBlend'],load_ui=False,use_scripts=False)
     scene=bpy.context.scene
     view=bpy.context.view_layer

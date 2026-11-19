@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { tempProject, png, triangleGlb } from './fixtures.mjs';
+import { tempProject, png, glb, triangleGlb } from './fixtures.mjs';
 import { initOrUpdateProject,loadProjectState,updateProjectState } from '../lib/project/state.js';
-import { validateEditorParams,runEditorOperation,rollbackEditor,createAiEditRequest,prepareAiEditHandoff,reviewAiEditRequest,setEditorView,editorContent } from '../lib/project/editor.js';
+import { validateEditorParams,runEditorOperation,collectEditorJob,rollbackEditor,createAiEditRequest,prepareAiEditHandoff,reviewAiEditRequest,setEditorView,editorContent } from '../lib/project/editor.js';
+import { collectReviewEvidence } from '../lib/project/reviews.js';
 import { createAccountBudget } from '../lib/providers/account-budget.js';
 import { runTurnaroundGeneration } from '../lib/providers/image-router.js';
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -18,6 +19,7 @@ const mockCompanion=async(url,init)=>{
   await fs.writeFile(command.outputs.blend,'BLENDER-v500fixture-'+command.requestId);
   await fs.writeFile(command.outputs.preview,triangleGlb());
   await fs.writeFile(command.outputs.report,JSON.stringify({objects:[{name:'Head',type:'MESH'}],gates:{weights:true,textures:true}}));
+  if(command.operation==='export_vrm'&&command.outputs.vrm)await fs.writeFile(command.outputs.vrm,glb({extensionsUsed:['VRMC_vrm'],extensions:{VRMC_vrm:{specVersion:'1.0'}}}));
   return Response.json({ok:true,exitCode:0,resultJson:{verdict:'pass',requestId:command.requestId,outputs:command.outputs}});
 };
 test('P2 structured editor rejects arbitrary Python and unbounded transforms',()=>{
@@ -25,16 +27,24 @@ test('P2 structured editor rejects arbitrary Python and unbounded transforms',()
   assert.throws(()=>validateEditorParams('head_scale',{factor:4}),/scale/);
   assert.throws(()=>validateEditorParams('transform',{objects:['Head'],translation:[NaN,0,0]}),/Transform/);
   assert.throws(()=>validateEditorParams('spring_setup',{hitRadius:99}),/coefficient/);
+  assert.deepEqual(validateEditorParams('transform',{objects:['Head'],rotation:[0,90,-45]}).rotation,[0,90,-45]);
+  assert.throws(()=>validateEditorParams('transform',{objects:['Head'],rotation:[0,400,0]}),/Transform|rotation/i);
+  assert.deepEqual(validateEditorParams('append_foundation_head',{materialId:'material_00000000-0000-0000-0000-000000000000',objects:['Face'],headBone:'Head',rotation:[0,180,0]}).rotation,[0,180,0]);
 });
 test('P2 editor creates immutable revisions and rollback verifies bytes',async t=>{
   const dir=await tempProject(t),source=path.join(dir,'original.blend');await fs.writeFile(source,'BLENDER-v500original');
   const first=await runEditorOperation({projectDir:dir,operation:'import_blend',params:{sourceBlend:source},fetchImpl:mockCompanion});
+  const ev4=await collectReviewEvidence(dir,(await loadProjectState(dir)).state,'4_assembly');
+  assert.ok(ev4.fingerprint);
   const second=await runEditorOperation({projectDir:dir,operation:'head_scale',params:{factor:.9},expectedRevisionId:first.revisionId,fetchImpl:mockCompanion});
   assert.notEqual(first.revisionId,second.revisionId);assert.equal(await fs.readFile(source,'utf8'),'BLENDER-v500original');
   await assert.rejects(runEditorOperation({projectDir:dir,operation:'audit',expectedRevisionId:first.revisionId,fetchImpl:mockCompanion}),/base revision/);
   await rollbackEditor({projectDir:dir,revisionId:first.revisionId,expectedRevisionId:second.revisionId});
   assert.equal((await loadProjectState(dir)).state.editor.activeRevisionId,first.revisionId);
   assert.equal((await editorContent(dir,first.revisionId)).mime,'model/gltf-binary');
+  const exported=await runEditorOperation({projectDir:dir,operation:'export_vrm',expectedRevisionId:first.revisionId,fetchImpl:mockCompanion});
+  assert.ok((await loadProjectState(dir)).state.vrmMetadata.exportedVrmPath?.endsWith('avatar.vrm'));
+  await rollbackEditor({projectDir:dir,revisionId:first.revisionId,expectedRevisionId:exported.revisionId});
   const r=(await loadProjectState(dir)).state.editor.revisions[0];await fs.appendFile(path.join(dir,r.artifacts.blend.filePath),'tampered');
   await assert.rejects(rollbackEditor({projectDir:dir,revisionId:first.revisionId}),/changed on disk/);
 });
@@ -43,6 +53,15 @@ test('P2 failed Blender edit never activates a new revision',async t=>{
   const fetchImpl=async(url,init)=>url.endsWith('/headless')?Response.json({ok:true,exitCode:1}):mockCompanion(url,init);
   await assert.rejects(runEditorOperation({projectDir:dir,operation:'import_blend',params:{sourceBlend:source},fetchImpl}),/process failed/);
   assert.equal((await loadProjectState(dir)).state.editor?.activeRevisionId,undefined);
+  const promotedFetch=async(url,init)=>{
+    if(url.endsWith('/headless'))return Response.json({ok:true,kind:'promoted',jobId:'ed-job-1'});
+    if(url.endsWith('/job'))return Response.json({ok:true,status:'completed',result:{exitCode:0,resultJson:{verdict:'fail',error:'bad output'}}});
+    return mockCompanion(url,init);
+  };
+  const queued=await runEditorOperation({projectDir:dir,operation:'import_blend',params:{sourceBlend:source},fetchImpl:promotedFetch});
+  assert.equal(queued.pending,true);
+  await assert.rejects(collectEditorJob({projectDir:dir,fetchImpl:promotedFetch}),/bad output|does not match/);
+  assert.equal((await loadProjectState(dir)).state.editor.pendingJob,null,'collectEditorJob clears pendingJob on finalize failure');
 });
 test('P2 AI request binds selected objects, camera and revision rather than executing free text',async t=>{
   const dir=await tempProject(t),source=path.join(dir,'source.blend');await fs.writeFile(source,'BLENDER-v500source');

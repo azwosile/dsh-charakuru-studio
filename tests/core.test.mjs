@@ -55,6 +55,10 @@ test('Tripo: real GLB validation, concurrent dedupe, billing conflict and month 
   assert.deepEqual(out.map(x => x.duplicate).sort(), [false, true]);
   assert.equal((await loadProjectState(dir)).state.tripoQuota.creditsUsed, 25);
   assert.equal(out[0].sha256.length, 64);
+  for (const part of ['clothing', 'hair']) {
+    const partRes = await archiveTripoGlbAsset({ projectDir: dir, sourceGlbPath: 'input.glb', part, remoteTaskId: `remote-${part}`, creditsSpent: 0 });
+    assert.equal(partRes.part, part);
+  }
   await assert.rejects(archiveTripoGlbAsset({ ...args, creditsSpent: 30 }), /conflicting/);
   assert.throws(() => validateGlb(Buffer.from('glTF')), /header/);
   const broken = glb(); broken.writeUInt32LE(9999, 8);
@@ -91,6 +95,11 @@ test('Tool schema forbids Agent review approval and secrets; degraded stays nonp
   await assert.rejects(project.execute({ action: 'checkpoint', checkpointAction: 'approve' }), /checkpointAction/);
   const credentials = tools.find(t => t.name === 'charakuru_credentials');
   assert.equal('secret' in credentials.parameters.properties, false);
+  for (const providerId of ['openai', 'ark']) {
+    const filtered = await credentials.execute({ action: 'status', providerId });
+    assert.equal(filtered.credentials.length, 1);
+    assert.equal(filtered.credentials[0].id, providerId);
+  }
   const blender = tools.find(t => t.name === 'charakuru_blender_avatar');
   assert.ok(blender.parameters.properties.inputBlendPath);
   assert.equal(okEnvelope({ verdict: 'degraded', ok: true }).ok, false);

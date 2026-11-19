@@ -195,6 +195,7 @@ async function loadClient(storage = new Map()) {
     window: { __ModuleLoader__: { load(value) { spec = value; } } },
     localStorage: {getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
     console,
+    crypto: globalThis.crypto,
     URL, URLSearchParams,
     AbortController,
     setTimeout,
@@ -630,7 +631,7 @@ test('every stage exposes its own material entry; desktop native path and web ra
     mounted.sandbox.window.location=new URL(desktop?'dsh-app://app/':'http://127.0.0.1:51886/');
     mounted.sandbox.window.__DSH_HOST_PATHS__={pathFor(input){assert.equal(input,file);pathForCalls++;return 'D:/外部/外部素材.png';}};
     mounted.sandbox.window.__DSH_DIRECTORY_PICKER__={pick:async()=>dir};
-    const boot={version:'0.6.1',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
+    const boot={version:'0.6.2',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
       projectState:{stateRevision:1,activeStageId:'1_concept',stages:{},assets:{items:[],selected:{}},materials:{items:[],selected:{}}},projectSummary:{}};
     studio.set({boot,loaded:true});studio.put('projectDir',dir);
     mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?boot:{ok:true});};
@@ -665,12 +666,12 @@ test('every stage exposes its own material entry; desktop native path and web ra
   }
 });
 
-test('the 0.6.1 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
+test('the 0.6.2 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
   const storage=new Map();const mounted=await mount({storage});const studio=mounted.face.studio;
-  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.6.1',activeProjectDir:'/test',sessionToken:'fixture'});
+  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.6.2',activeProjectDir:'/test',sessionToken:'fixture'});
   const wrong=await studio.act(()=>studio.refresh(true));
   assert.equal(wrong,undefined);assert.equal(studio.getSnapshot().boot,null);
-  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.6\.1/);assert.equal(storage.has('avatar-studio-loopback'),false);
+  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.6\.2/);assert.equal(storage.has('avatar-studio-loopback'),false);
   studio.put('base','http://127.0.0.1:52886');
   const correct=await studio.act(()=>studio.refresh(true));assert.equal(correct.sessionToken,'fixture');
   assert.equal(studio.getSnapshot().result.sessionToken,undefined);
@@ -698,4 +699,21 @@ test('Tripo generation-confirmed panel uses native file picking only on DSH desk
   studio.set({tab:'models'});studio.put('model','mai-image-2.7');
   const catalog=hostNodes(nested(mounted,panel(),'DeskImageWorkspace'));
   assert.ok(!catalog.some(n=>n.type==='button'&&textOf(n)==='Generate selected views'));
+
+  // P0-7.1: client-images clears imageRequestId after a passing generation and supports non-HTTPS crypto fallback.
+  mounted.sandbox.crypto={getRandomValues:arr=>{for(let i=0;i<arr.length;i++)arr[i]=(i+17)&255;return arr;}};
+  studio.put('model','qwen-image-2.1-local');
+  studio.put('imageMode','text_to_image');
+  studio.put('imageScope','head_front');
+  const bootState=studio.getSnapshot().boot;
+  mounted.sandbox.fetch=async url=>Response.json(new URL(url).pathname==='/studio/bootstrap'?{...bootState,version:'0.6.2'}:{ok:true,allowed:true,verdict:'pass'});
+  let imgTree=nested(mounted,panel(),'DeskImageWorkspace');
+  btn(imgTree,'Check capabilities').props.onClick();
+  await new Promise(setImmediate);
+  imgTree=nested(mounted,panel(),'DeskImageWorkspace');
+  const genBtn=btn(imgTree,'Generate selected views');
+  assert.ok(genBtn&&!genBtn.props.disabled);
+  genBtn.props.onClick();
+  await new Promise(setImmediate);
+  assert.equal(studio.getSnapshot().form.imageRequestId,'');
 });

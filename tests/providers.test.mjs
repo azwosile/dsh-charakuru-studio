@@ -22,6 +22,8 @@ test('image formats: valid scanlines, corrupt CRC/truncated/oversized ZIP reject
 test('prompt compiler and Anima official graph contracts', () => {
   assert.ok(queryModelCatalog().total >= 14);
   assert.equal(queryModelCatalog().benchmark.updatedAt, '2026-11-18');
+  assert.equal(queryModelCatalog().models.find(row => row.id === 'gpt-image-2.6-sunburst')?.nativeRgba, true);
+  assert.equal(Boolean(queryModelCatalog().models.find(row => row.id === 'seedream-5.5')?.nativeRgba), false);
   assert.equal(queryModelCatalog({weights:'open_weights'}).models.find(row=>row.id==='minimax-h3-image').driver,'catalog');
   assert.equal(compileTurnaroundPromptPack().views.length, 11);
   assert.throws(() => compileTurnaroundPromptPack({ modelId: 'missing' }), /Unknown/);

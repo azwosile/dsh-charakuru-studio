@@ -23,6 +23,10 @@ async function prepared(t, withRef = false) {
 test('native Qwen recipe blocks remote/custom nodes and disconnected reference before upload', () => {
   const graph = buildQwenComfyRecipe();
   assert.deepEqual(inspectQwenRecipe(graph),{loadId:'1',encodeId:'5',saveId:'8',sampleId:'6'});
+  const ggufAdv = structuredClone(graph);
+  ggufAdv[2] = { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'qwen-image-edit-Q4_K_M.gguf' } };
+  ggufAdv[6] = { class_type: 'KSamplerAdvanced', inputs: { ...graph[6].inputs } };
+  assert.deepEqual(inspectQwenRecipe(ggufAdv), { loadId: '1', encodeId: '5', saveId: '8', sampleId: '6' });
   const unsafe = structuredClone(graph); unsafe[9]={class_type:'NonLocalNode',inputs:{}};
   assert.throws(()=>inspectQwenRecipe(unsafe),/核心节点/);
   delete graph[5].inputs['images.image_1'];
@@ -130,6 +134,12 @@ test('official OpenAI, Ark, and Gemini edits use distinct endpoints, separate cr
     assert.equal(url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent');assert.equal(init.headers['x-goog-api-key'],'gemini-fixture');
     assert.equal(JSON.parse(init.body).contents[0].parts[0].inlineData.data,png().toString('base64'));
     return Response.json({candidates:[{content:{parts:[{thought:true,inlineData:{mimeType:'image/png',data:'wrong'}},{inlineData:{mimeType:'image/png',data:png().toString('base64')}}]}}]});});assert.equal(gemini.verdict,'pass');
+  const loopbackCompat=await runTurnaroundGeneration({...common,referenceMode:'text_only',modelId:'openai-compatible-gateway',apiModelOverride:'local-proxy-model',requestId:'req-loopback-compat',endpoints:{openaiCompatBaseUrl:'http://127.0.0.1:8080/v1'},fetchImpl:async(url,init)=>{
+    assert.equal(url,'http://127.0.0.1:8080/v1/images/generations');
+    assert.equal(init.headers.Authorization,'Bearer gateway-fixture');
+    return pngResponse();
+  }});
+  assert.equal(loopbackCompat.verdict,'pass');
 });
 
 test('catalog rows, absent cloud consent, unscoped references and URL-only results do not cause other requests', async t => {

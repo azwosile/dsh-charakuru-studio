@@ -19,6 +19,7 @@ dsh-charakuru.local.json
 # Private verification and generated output
 /releases/
 /research/
+docs/HANDOFF-NEXT-AI.md
 .runtime/
 *.blend
 *.blend1

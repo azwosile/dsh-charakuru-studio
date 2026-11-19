@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio",
-    "description": "0.6.1 experimental: AI-guided editing and local render review, Tripo browser handoffs, explicit ComfyUI generation modes, per-model settings and editable prompts. Cloud execution off by default.",
-    "detail": "docs/DETAIL.md"
+    "description": "0.6.2 experimental: AI-guided editing and local render review, Tripo browser handoffs, explicit ComfyUI generation modes, per-model settings and editable prompts. Cloud execution off by default.",
+    "detail": "docs/DETAIL.en.md"
   }
 }

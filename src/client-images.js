@@ -79,10 +79,21 @@ function DeskImageWorkspace(props) {
   function save(mod){return studio.action('/studio/image/profile',Object.assign({projectDir:boot.activeProjectDir,expectedRevision:project.stateRevision,modelId:model.id},mod),true);}
   function preflight(){studio.act(async function(){var result=await studio.request('/studio/views/preflight',payload);studio.set({imagePreflight:{key:key,result:result}});return result;});}
   function preview(){studio.act(async function(){var data=await studio.request('/studio/prompts/compile',payload);return Object.assign({},data,{previewKey:key});});}
+  function newRequestId(){
+    if(typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function')return crypto.randomUUID();
+    var bytes=new Uint8Array(16);
+    if(typeof crypto!=='undefined'&&typeof crypto.getRandomValues==='function')crypto.getRandomValues(bytes);
+    else for(var i=0;i<16;i+=1)bytes[i]=Math.floor(Math.random()*256);
+    bytes[6]=(bytes[6]&0x0f)|0x40;bytes[8]=(bytes[8]&0x3f)|0x80;
+    var hex=Array.from(bytes,function(b){return b.toString(16).padStart(2,'0');}).join('');
+    return hex.slice(0,8)+'-'+hex.slice(8,12)+'-'+hex.slice(12,16)+'-'+hex.slice(16,20)+'-'+hex.slice(20);
+  }
   function execute(){
     if(cloud&&!window.confirm(model.name+' / '+config.apiModelOverride+' · '+slotList[0]+'\n\n'+t(usesRef?'cloudConfirmRef':'cloudConfirmText')))return;
-    var id=form.imageRequestId||crypto.randomUUID();if(!form.imageRequestId)studio.put('imageRequestId',id);
-    studio.action('/studio/views/generate',Object.assign({},payload,{mode:'execute',requestId:id,expectedRevision:project.stateRevision,cloudConfirmed:cloud}),true);
+    var id=form.imageRequestId||newRequestId();if(!form.imageRequestId)studio.put('imageRequestId',id);
+    studio.action('/studio/views/generate',Object.assign({},payload,{mode:'execute',requestId:id,expectedRevision:project.stateRevision,cloudConfirmed:cloud}),true).then(function(data){
+      if(data&&data.verdict==='pass')studio.put('imageRequestId','');
+    });
   }
   var modesOk=catalog||(!usesRef&&!qwen)||(usesRef&&hasOriginal&&(canReference||model.driver==='qwen_local'));
   var panel=form.imagePanel;
