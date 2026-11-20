@@ -106,7 +106,8 @@ test('the base branch verifies adopted Blend inputs and roots; fitting and exter
   assert.equal(revisionFromSelectedBody(await current(dir),unrelated.revisionId),false);
   await assert.rejects(()=>run('fit_foundation',{bodyObject:'Base'},unrelated.revisionId),/adopted body/);
   assert.throws(()=>validateEditorParams('fit_foundation',{bodyObject:'x',scale:[.01,1,1]}),/0.75/);
-  assert.throws(()=>validateEditorParams('fit_foundation',{bodyObject:'x',shapeValues:[{key:'Chest',value:1.5}]}),/shape keys/);
+  assert.doesNotThrow(()=>validateEditorParams('fit_foundation',{bodyObject:'x',shapeValues:[{key:'Chest',value:-0.5}]}));
+  assert.throws(()=>validateEditorParams('fit_foundation',{bodyObject:'x',shapeValues:[{key:'Chest',value:15}]}),/shape keys/);
   assert.throws(()=>validateEditorParams('append_foundation_head',{materialId:head.id,objects:['face'],headBone:'Head',sourceBlend:'/outside.blend'}),/registered material/);
 });
 
@@ -186,7 +187,7 @@ test('AI foundation proportion and donor requests inspect immutable inputs, enfo
   assert.match(fit.instruction,/editor_inspect/);assert.match(fit.instruction,/不要让用户代填/);
   const tool=buildStudioTools({config:{blenderPluginUrl:base}}).find(x=>x.name==='charakuru_blender_avatar');
   const summary=await tool.execute({action:'editor_inspect',projectDir:dir,editRequestId:fit.request.id});assert.equal(summary.ok,true);
-  assert.deepEqual(summary.allowed,['fit_foundation']);assert.equal(summary.inventory[0].shapeKeys[0].name,'Chest');
+  assert.deepEqual(summary.allowed,['fit_foundation','head_scale']);assert.equal(summary.inventory[0].shapeKeys[0].name,'Chest');
   await assert.rejects(runEditorOperation({...common,editRequestId:fit.request.id,operation:'transform',params:{objects:['Base']}}),/outside/);
   const out=await runEditorOperation({...common,editRequestId:fit.request.id,operation:'fit_foundation',params:{bodyObject:'Base',armature:'Rig',scale:[1,1,1.04]}});
   const after=await current(dir);

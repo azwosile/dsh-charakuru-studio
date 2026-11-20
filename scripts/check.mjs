@@ -23,6 +23,7 @@ const expectedClient = await buildClientSource(pathToFileURL(root + path.sep));
 const actualClient = (await fs.readFile(path.join(root, 'lib/client.js'), 'utf8')).replace(/\r\n/g, '\n');
 if (actualClient !== expectedClient) throw new Error('lib/client.js is out of sync with src/* or lib/client-preview.js; run `npm run build:client`');
 for (const p of [manifest.main, manifest.types, manifest.icon, manifest.dsh.bundle.patch, './lib/client.js']) await fs.access(path.resolve(root, p));
+if (Array.isArray(manifest.files) && manifest.files.includes('assets')) await fs.access(path.join(root, 'assets/motions/cleanroom_walk_loop.vrma'));
 for (const locale of ['en', 'zh']) {
   const raw = await fs.readFile(path.join(root, 'locale', locale + '.json'), 'utf8');
   if (locale === 'en' && /[\u4e00-\u9fff]/.test(raw)) throw new Error('locale/en.json must not contain CJK characters');

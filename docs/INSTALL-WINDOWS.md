@@ -1,16 +1,16 @@
 # Windows / Electron：安装、升级、回退、卸载
 
-**0.6.1**：选择 `dsh-charakuru-studio-0.6.1.tgz`。如果旧版仍占 Studio 端口，先在目标 profile 停用旧组件或为新实例设独立端口，并在工作台「项目文件」同步回环地址。不要并开同端口。现有工程会默认为原画重建；切换模式不会删除旧修订。渲染需本机 Eevee 可用，第三方模型仍从本机私有工程登记。新版接力与生图配置见 [0.6.1 使用指南](WORKBENCH-0.6.1.md)。
+**0.10.0（实验版 · 内部验证阶段）**：选择 `dsh-charakuru-studio-0.10.0.tgz`。如果旧版仍占 Studio 端口，先在目标 profile 停用旧组件或为新实例设独立端口，并在工作台全局设置抽屉同步回环地址。不要并开同端口。现有工程会保留既有工作流（未显式设置时默认为原画重建）；切换模式不会删除旧修订。渲染需本机 Eevee / Cycles 可用，第三方模型仍从本机私有工程登记。界面操作、双通道工序与验收边界见 [工作台使用指南](WORKBENCH.md)、[建模与双通道工序](OPERATIONS.md) 与 [0.10.0 验证报告](VERIFICATION-0.10.0.md)。
 
 
-版本：Avatar Studio 0.6.1（实验）。包名保持 `dsh-charakuru-studio`。目标 DSH 0.2.2-rc.3 / Node 22+。
+版本：Avatar Studio 0.10.0（实验版）。包名保持 `dsh-charakuru-studio`。目标 DSH 0.2.2-rc.3 / Node 22+。
 
 ## 安装与升级
 
 1. 备份自己的工程目录、已用旧包和 `%USERPROFILE%/.dsh/profiles/desktop` 中已有配置/锁文件。备份可能包含敏感信息，只在本机保留。
-2. 打开官方 DSH Electron 应用，侧栏「插件 → 添加插件」。输入本地 `dsh-charakuru-studio-0.6.1.tgz` 的完整路径。
+2. 打开官方 DSH Electron 应用，侧栏「插件 → 添加插件」。输入本地 `dsh-charakuru-studio-0.10.0.tgz` 的完整路径。
 3. 点击「安装」，核对包名与版本，点击「立即启用」。不要批准无关插件安装脚本。
-4. 进入 **Avatar Studio 工作台**，核对九标签（含「外部素材」和「独立渲染」）、连接状态、工程版本；`/health` 应报告 0.6.1。
+4. 进入 **Avatar Studio 工作台**，核对「3 主工作区（主工作台 / 独立渲染台 / 资产库）+ 1 全局设置抽屉」（及向后兼容的 9 标签导航）、连接状态与工程版本；`/health` 应报告 `0.10.0`。
 5. 必要时用应用菜单重启。不要同时运行两个监听同一工作台端口的实例。
 
 **desktop profile 由 Electron 独占管理。** CLI 会拒绝该 profile；不要给 EXE 追加 `plugin` 命令，不要手工修改 profile 的 package.json/锁文件绕过。0.2.1 起允许真实 `dsh-app://app` 来源；0.2.0 的工作台连接问题已修复。

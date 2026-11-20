@@ -19,7 +19,7 @@ window.__ModuleLoader__.load({
     var PANEL_ID = 'charakuru-studio';
     var SIDEBAR_ORDER = 20;
     var TABS = ['pipeline', 'assets', 'editor', 'render', 'materials', 'models', 'tripo', 'blender', 'credentials'];
-    var CLIENT_VERSION = '0.7.0';
+    var CLIENT_VERSION = '0.10.0';
     var TIMEOUT_FAST = 15000;
     var TIMEOUT_SLOW = 300000;
 
@@ -64,7 +64,7 @@ window.__ModuleLoader__.load({
         materialMotionChosen: "Motion selected for the preview. It has not changed the model.",
         materialMotionNeedsVrm: "Select a VRM 1.0 model to play this motion, or open an exported VRM revision in the editor.",
         materialNoProject: "Choose and initialize a project before importing files.",
-        materialUpgradeRequired: "This Host has no stage material endpoints. Load the 0.7.0 Host and verify the workbench port.",
+        materialUpgradeRequired: "This Host has no stage material endpoints. Load the 0.10.0 Host and verify the workbench port.",
         materialSelected: "Registered editor input",
         materialTarget: "Mesh object with UVs",
         materialTextureSlot: "Material slot (0-based)",
@@ -256,7 +256,7 @@ window.__ModuleLoader__.load({
         materialMotionChosen: "已选择预览动作，没有改动模型。",
         materialMotionNeedsVrm: "先选一个 VRM 1.0，或在编辑器打开已导出 VRM 的修订，再播放此动作。",
         materialNoProject: "请先选择工程目录并初始化，再登记素材。",
-        materialUpgradeRequired: "当前 Host 没有素材接口。请启用 0.7.0 并核对工作台连接端口。",
+        materialUpgradeRequired: "当前 Host 没有素材接口。请启用 0.10.0 并核对工作台连接端口。",
         materialSelected: "已登记的编辑输入",
         materialTarget: "有 UV 的网格对象",
         materialTextureSlot: "材质槽（从 0 开始）",
@@ -528,6 +528,10 @@ window.__ModuleLoader__.load({
         deskAiBriefs:{},deskInitialMode:'illustration',deskStage:'',deskBaseStep:'base',deskAngle:'front',deskImageGuides:true,deskPart:'head',deskCandidate:'',
         studioObjectPart:'clothing',studioRefId:'',studioRefIds:[],studioCap:'',studioQuote:'',studioDownload:'',studioPartPreview:'',deskReviewOriginal:false,
         blenderChannel:'auto',newFolderName:'',guiCheckoutNote:'',guiExportVrm:false,
+        triView3d:false,triViewOpacity:'0.35',heightRuler:true,targetHeightM:'1.60',
+        headBodyRatio:'6.3',neckScaleFactor:'0.86',linkHeadNeck:true,calibrationHistory:{past:[],future:[]},
+        vrmMetaTitle:'',vrmMetaVersion:'1.0.0',vrmMetaAuthors:'',vrmMetaCommercialUsage:'personalNonProfit',vrmMetaAllowRedistribution:false,vrmMetaModification:'prohibited',
+        expressionPresets:['blink','blinkLeft','blinkRight','aa','ih','ou','ee','oh','happy','angry','sad','relaxed','surprised','neutral'],
         deskRenderId:'',deskRenderCompare:'',deskRenderBrief:'',deskRenderNote:'',
         imageRequestId: '', accountAlias: '', accountLimit: '0', accountChannel: 'tripo_studio', sourceBlend: '', vrmAddonPath: '', editorCamera: 'front', overlayId: '', overlayOpacity: '0.35', selectedObject: '', playMotion: false, assetKind: 'image', slotId: 'source', sourcePath: '', previewId: '', projectDir: activeProject, prompt: '', source: '', allowance: '200',
         model: config.defaultImageModel || 'qwen-image-2.1-local',
@@ -537,6 +541,17 @@ window.__ModuleLoader__.load({
         operation: 'stage1_safe_import', blend: '', headGlb: '', bodyGlb: '',
         target: 'headless', provider: 'novelai', secret: ''
       };
+    }
+
+    function safeGetService(ctx, name) {
+      if (typeof ctx?.get === 'function') {
+        try {
+          return ctx.get(name);
+        } catch (_) {
+          return undefined;
+        }
+      }
+      return undefined;
     }
 
     /**
@@ -628,6 +643,17 @@ window.__ModuleLoader__.load({
           if (spec.preferredImageModel) next.model = spec.preferredImageModel;
           if (spec.characterPrompt) next.prompt = spec.characterPrompt;
           next.source = spec.sourceImages && spec.sourceImages[0] || '';
+          if (typeof spec.targetHeadBodyRatio === 'number') next.headBodyRatio = String(spec.targetHeadBodyRatio);
+          if (typeof spec.neckScaleFactor === 'number') next.neckScaleFactor = String(spec.neckScaleFactor);
+        }
+        var vm = data.projectState && data.projectState.vrmMetadata;
+        if (vm) {
+          next.vrmMetaTitle = vm.title || data.projectState.projectName || '';
+          next.vrmMetaVersion = vm.version || '1.0.0';
+          next.vrmMetaAuthors = Array.isArray(vm.authors) ? vm.authors.join(', ') : '';
+          next.vrmMetaCommercialUsage = vm.commercialUsage || 'personalNonProfit';
+          next.vrmMetaAllowRedistribution = Boolean(vm.allowRedistribution);
+          next.vrmMetaModification = vm.modification || 'prohibited';
         }
         var editor = data.projectState && data.projectState.editor;
         var view = editor && editor.view;
@@ -708,7 +734,7 @@ window.__ModuleLoader__.load({
 
       /** Current session id: the one the main view retains (built-in convention). */
       function currentSessionId() {
-        var sessions = ctx.get('sessions');
+        var sessions = safeGetService(ctx, 'sessions');
         if (!sessions || !sessions.list) return undefined;
         var list = sessions.list.getSnapshot();
         var byId = (list && list.byId) || {};
@@ -728,8 +754,8 @@ window.__ModuleLoader__.load({
        * @returns {'ok'|'no-session'|'blocked'|'unsupported'}
        */
       function insertInstructions(prompt) {
-        var sessions = ctx.get('sessions');
-        var conversation = ctx.get('conversation');
+        var sessions = safeGetService(ctx, 'sessions');
+        var conversation = safeGetService(ctx, 'conversation');
         if (!sessions || !conversation || !conversation.input
           || typeof conversation.input.requestDraftInitialization !== 'function') return 'unsupported';
         var id = currentSessionId();
@@ -744,7 +770,7 @@ window.__ModuleLoader__.load({
 
       /** Return to the transcript (global panels clear the active panel id). */
       function back() {
-        var layout = ctx.get('layout');
+        var layout = safeGetService(ctx, 'layout');
         if (layout && typeof layout.selectPanel === 'function') layout.selectPanel(null);
       }
 
@@ -1073,6 +1099,9 @@ window.__ModuleLoader__.load({
         var textureMeshes=(editRevision?.audit?.objects || []).filter(function(o){return o.type==='MESH' && !o.helper;});
         var textureTarget=form.materialTarget || form.selectedObject;
         var overlayAsset=assetItems.find(function(a){return a.id===form.overlayId;});
+        var editorTriViews = projectState ? deskTriViewUrls(boot, form, projectState, assetUrl, overlayAsset ? assetUrl(overlayAsset) : null) : null;
+        var editorMotionUrl = editRevision ? deskMotionUrl(boot, form, projectMaterials, editRevision) : null;
+        var hasCustomOrBuiltinMotion = Boolean(form.materialMotionId === 'builtin:walk' || previewMotion);
         function editorUrl(kind){return loopback(form.base)+'/studio/editor/content?projectDir='+encodeURIComponent(form.projectDir||boot.activeProjectDir)+'&revisionId='+editRevision.id+'&kind='+kind+'&access='+encodeURIComponent(boot.sessionToken||'');}
         function editorRun(operation){
           if(operation==='import_blend'&&!window.confirm(t('materialTrustBlend')))return;
@@ -1103,13 +1132,19 @@ window.__ModuleLoader__.load({
           h('div',{className:'ck-row'},button('editorImport',function(){editorRun('import_blend');},!form.sourceBlend||!form.projectDir||!!(editorState&&editorState.pendingJob)),button('checkpointImport',function(){editorRun('import_checkpoint');},!blenderCheckpoint||!!(editorState&&editorState.pendingJob)),button('collectEditor',function(){studio.action('/studio/editor/collect',{},true);},!editorState||!editorState.pendingJob),button('cancelEditor',function(){studio.action('/studio/editor/cancel',{},true);},!editorState||!editorState.pendingJob)),
           editRevision?h(React.Fragment,null,
             h('div',{className:'ck-grid'},select('editorCamera','camera',[['front',t('camFront')],['back',t('camBack')],['left',t('camLeft')],['right',t('camRight')],['perspective',t('camPersp')]]),select('overlayId','overlay',[['',t('noOverlay')]].concat(assetItems.filter(function(a){return a.kind==='image';}).map(function(a){return [a.id,a.label||a.slotId];}))),field('overlayOpacity','overlayOpacity','number')),
-            h('div',{className:'ck-row'},button('saveView',function(){studio.action('/studio/editor/view',{camera:form.editorCamera,overlayAssetId:form.overlayId||null,overlayOpacity:Number(form.overlayOpacity),expectedRevision:projectState.stateRevision},true);}),h('label',null,h('input',{type:'checkbox',checked:!!form.playMotion,onChange:function(e){studio.put('playMotion',e.target.checked);}}),t('vrmWalkProbe'))),
-            projectMaterials.some(function(m){return m.intent==='motion';}) ? select('materialMotionId','materialMotion',[['',t('materialNoMotion')]].concat(projectMaterials.filter(function(m){return m.intent==='motion';}).map(function(m){return [m.id,m.fileName+' · '+stageName(m.stageId)+' · '+m.sha256.slice(0,8)];}))) : null,
-            previewMotion && !editRevision.artifacts.vrm ? h('p',{className:'ck-callout'},t('materialMotionNeedsVrm')) : null,
-            h(GeometryPreview,{key:editRevision.id,lang:lang,url:editorUrl(editRevision.artifacts.vrm?'vrm':'preview'),camera:form.editorCamera,overlayUrl:overlayAsset?assetUrl(overlayAsset):null,opacity:Number(form.overlayOpacity),playMotion:form.playMotion,motionUrl:previewMotion && editRevision.artifacts.vrm ? studioMaterialUrl(form,boot,previewMotion) : null,onSelect:function(name){studio.put('selectedObject',name);}}),
+            h('div',{className:'ck-row'},
+              button('saveView',function(){studio.action('/studio/editor/view',{camera:form.editorCamera,overlayAssetId:form.overlayId||null,overlayOpacity:Number(form.overlayOpacity),expectedRevision:projectState.stateRevision},true);}),
+              h('label',null,h('input',{type:'checkbox',checked:!!form.playMotion,onChange:function(e){studio.put('playMotion',e.target.checked);}}),t('vrmWalkProbe')),
+              h('label',null,h('input',{type:'checkbox',checked:!!form.triView3d,onChange:function(e){studio.put('triView3d',e.target.checked);}}),lang==='Zh'?'3D 三视图平面':'3D Tri-View'),
+              h('label',null,h('input',{type:'checkbox',checked:!!form.heightRuler,onChange:function(e){studio.put('heightRuler',e.target.checked);}}),lang==='Zh'?'Y=0 身高标尺':'Y=0 Ruler')),
+            select('materialMotionId','materialMotion',[['',t('materialNoMotion')],['builtin:walk',lang==='Zh'?'内置漫步参考 (MIT/CC0)':'Built-in walk loop (MIT/CC0)']].concat(projectMaterials.filter(function(m){return m.intent==='motion';}).map(function(m){return [m.id,m.fileName+' · '+stageName(m.stageId)+' · '+m.sha256.slice(0,8)];}))),
+            hasCustomOrBuiltinMotion && !editRevision.artifacts.vrm ? h('p',{className:'ck-callout'},t('materialMotionNeedsVrm')) : null,
+            h(GeometryPreview,{key:editRevision.id,lang:lang,url:editorUrl(editRevision.artifacts.vrm?'vrm':'preview'),camera:form.editorCamera,overlayUrl:overlayAsset?assetUrl(overlayAsset):null,opacity:Number(form.overlayOpacity),triView3d:!!form.triView3d,triViewUrls:editorTriViews,triViewOpacity:Number(form.triViewOpacity||form.overlayOpacity||0.35),heightRuler:!!form.heightRuler,targetHeightM:Number(form.targetHeightM||1.6),headBodyRatio:Number(form.headBodyRatio||6.3),neckScaleFactor:Number(form.neckScaleFactor||0.86),playMotion:form.playMotion,motionUrl:editorMotionUrl,onSelect:function(name){studio.put('selectedObject',name);}}),
             h('p',{className:'ck-muted'},t('currentRevision')+' '+editRevision.id.slice(0,8)+' · '+t('selectedObj')+' '+(form.selectedObject||t('noneObj'))+' · '+editRevision.operation),
             h(DeskAiJob,{studio:studio,state:state,projectState:projectState,revision:editRevision,lang:lang,intent:'general',showAll:true,
               objects:form.selectedObject&&(editRevision.audit?.objects||[]).some(function(o){return o.name===form.selectedObject;})?[form.selectedObject]:[]}),
+            h(DeskExpressionLab,{studio:studio,state:state,projectState:projectState,revision:editRevision,lang:lang}),
+            h(DeskVrmMetadataExport,{studio:studio,state:state,projectState:projectState,revision:editRevision,lang:lang}),
             button('editorUndo',function(){studio.action('/studio/editor/rollback',{revisionId:editRevision.parentId,expectedRevisionId:editRevision.id},true);},!editRevision.parentId||!!editorState.pendingJob),
             details('techDetails',false,h('pre',{className:'ck-pre'},JSON.stringify({gates:editRevision.audit.gates,notes:editRevision.audit.notes,revisions:editorState.revisions.map(function(r){return {id:r.id,operation:r.operation,parentId:r.parentId};})},null,2)))
           ):null

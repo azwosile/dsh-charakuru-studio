@@ -59,7 +59,16 @@ function RenderWorkspace(props) {
       selected.status==='queued'?h('div',{className:'ck-row'},deskButton(L('接力收集回执','Draft collection handoff'),collectBrief,busy,true),
         !gateway?deskButton(L('收集回执','Collect'),function(){studio.action('/studio/render/collect',{requestId:selected.id},true);},busy):null):null,
       selected.error?h('p',{className:'ck-error-detail'},selected.error):null,
-      selected.summary?h('p',{className:'ck-muted'},'Blender '+selected.summary.blenderVersion+' · '+selected.summary.meshes+' meshes · '+(selected.summary.toonMaterials||0)+' Toon'):null,
+      selected.summary?h('p',{className:'ck-muted'},[
+        selected.summary.blenderVersion?'Blender '+selected.summary.blenderVersion:null,
+        selected.summary.engine||null,
+        selected.summary.viewTransform||null,
+        selected.summary.lensType?(selected.summary.lensType==='ortho'?L('正交','ortho'):selected.summary.lensType==='persp'?L('透视','persp'):selected.summary.lensType):null,
+        selected.summary.meshes!=null?selected.summary.meshes+L(' 网格',' meshes'):null,
+        (selected.summary.toonMaterials||0)+' Toon',
+        selected.summary.outlineMeshes!=null?selected.summary.outlineMeshes+L(' 描边',' outline'):null,
+        selected.summary.faceSdfMaterials!=null?selected.summary.faceSdfMaterials+' Face SDF':null
+      ].filter(Boolean).join(' · ')):null,
       selected.artifacts?.png?h('div',{className:'ck-row'},deskButton(L('下载 PNG','Download PNG'),function(){save(selected);},busy),
         h('small',{className:'ck-desk-meta'},selected.artifacts.png.sha256.slice(0,12))):null,
       selected.artifacts?.png?deskSelect(L('对照：同修订的另一张图','Compare another still from this revision'),comparison?.id||'',[['',L('无','None')]].concat(requests.filter(function(r){return r.id!==selected.id&&r.revisionId===selected.revisionId&&r.artifacts?.png;}).map(function(r){return [r.id,r.id.slice(7,15)+' · '+(presets[r.recipe?.preset]?.[lang==='En'?'en':'zh']||'')];})),function(id){studio.put('deskRenderCompare',id);},busy):null,

@@ -643,7 +643,7 @@ test('every stage exposes its own material entry; desktop native path and web ra
     mounted.sandbox.window.location=new URL(desktop?'dsh-app://app/':'http://127.0.0.1:51886/');
     mounted.sandbox.window.__DSH_HOST_PATHS__={pathFor(input){assert.equal(input,file);pathForCalls++;return 'D:/外部/外部素材.png';}};
     mounted.sandbox.window.__DSH_DIRECTORY_PICKER__={pick:async()=>dir};
-    const boot={version:'0.7.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
+    const boot={version:'0.10.0',activeProjectDir:dir,projectExists:true,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,materialRoles:MATERIAL_ROLES,sessionToken:'fixture-session',
       projectState:{stateRevision:1,activeStageId:'1_concept',stages:{},assets:{items:[],selected:{}},materials:{items:[],selected:{}}},projectSummary:{}};
     studio.set({boot,loaded:true});studio.put('projectDir',dir);
     mounted.sandbox.fetch=async(url,init)=>{calls.push({url,init});return Response.json(new URL(url).pathname==='/studio/bootstrap'?boot:{ok:true});};
@@ -678,12 +678,12 @@ test('every stage exposes its own material entry; desktop native path and web ra
   }
 });
 
-test('the 0.7.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
+test('the 0.10.0 renderer cannot keep an old Host connection or carry its token to a different port', async () => {
   const storage=new Map();const mounted=await mount({storage});const studio=mounted.face.studio;
-  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.7.0',activeProjectDir:'/test',sessionToken:'fixture'});
+  mounted.sandbox.fetch=async url=>Response.json({version:new URL(url).port==='9886'?'0.3.2':'0.10.0',activeProjectDir:'/test',sessionToken:'fixture'});
   const wrong=await studio.act(()=>studio.refresh(true));
   assert.equal(wrong,undefined);assert.equal(studio.getSnapshot().boot,null);
-  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.7\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
+  assert.match(studio.getSnapshot().error,/Host version.*0\.3\.2.*0\.10\.0/);assert.equal(storage.has('avatar-studio-loopback'),false);
   studio.put('base','http://127.0.0.1:52886');
   const correct=await studio.act(()=>studio.refresh(true));assert.equal(correct.sessionToken,'fixture');
   assert.equal(studio.getSnapshot().result.sessionToken,undefined);
@@ -698,7 +698,7 @@ test('Tripo generation-confirmed panel supports native path picking on Desktop a
   const { queryModelCatalog }=await import('../lib/catalog/aa-image-hub.js');
   const mounted=await mount(),studio=mounted.face.studio;
   const project={stateRevision:4,activeStageId:'3_tripo',assets:{items:[],selected:{}},stages:{},workflow:{mode:'illustration'},tripoStudio:{tickets:[{id:'fixture-ticket',part:'head',creditCap:5,quotedCredits:4,status:'generation_confirmed',inputs:[],downloads:[]}]}};
-  const bootObj={version:'0.7.0',sessionToken:'tripo-sess',projectExists:true,activeProjectDir:'fixture',projectState:project,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,aaCatalog:queryModelCatalog()};
+  const bootObj={version:'0.10.0',sessionToken:'tripo-sess',projectExists:true,activeProjectDir:'fixture',projectState:project,stages:PIPELINE_STAGES,requiredViewSlots:REQUIRED_VIEW_SLOTS,aaCatalog:queryModelCatalog()};
   studio.set({tab:'tripo',loaded:true,boot:bootObj});
   const panel=()=>mounted.runtime.render(mounted.main.component,mounted.face);
   const file={name:'candidate.glb',size:256};
@@ -740,7 +740,7 @@ test('Tripo generation-confirmed panel supports native path picking on Desktop a
   studio.put('imageMode','text_to_image');
   studio.put('imageScope','head_front');
   const bootState=studio.getSnapshot().boot;
-  mounted.sandbox.fetch=async url=>Response.json(new URL(url).pathname==='/studio/bootstrap'?{...bootState,version:'0.7.0'}:{ok:true,allowed:true,verdict:'pass'});
+  mounted.sandbox.fetch=async url=>Response.json(new URL(url).pathname==='/studio/bootstrap'?{...bootState,version:'0.10.0'}:{ok:true,allowed:true,verdict:'pass'});
   let imgTree=nested(mounted,panel(),'DeskImageWorkspace');
   btn(imgTree,'Check capabilities').props.onClick();
   await new Promise(setImmediate);
@@ -762,7 +762,7 @@ function renderDeep(runtime, node) {
   return { ...node, children: (node.children || []).map(child => renderDeep(runtime, child)) };
 }
 
-test('v0.7.0 English mode emits zero CJK characters across all 9 rendered tabs and exposes Web folder browser & Blender channel controls', async () => {
+test('v0.10.0 English mode emits zero CJK characters across all 9 rendered tabs and exposes Web folder browser & Blender channel controls', async () => {
   const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
   const { MATERIAL_ROLES } = await import('../lib/project/material-roles.js');
   const { queryModelCatalog } = await import('../lib/catalog/aa-image-hub.js');
@@ -823,7 +823,7 @@ test('v0.7.0 English mode emits zero CJK characters across all 9 rendered tabs a
   };
 
   const boot = {
-    version: '0.7.0',
+    version: '0.10.0',
     sessionToken: 'en-audit-token',
     projectExists: true,
     activeProjectDir: 'D:/Projects/EnglishAuditDemo',
@@ -875,4 +875,280 @@ test('v0.7.0 English mode emits zero CJK characters across all 9 rendered tabs a
   await new Promise(setImmediate);
   assert.equal(calls.some(c => new URL(c.url).pathname === '/studio/editor/gui-checkout'), true);
   mounted.harness.dispose();
+});
+
+test('v0.8.0 RenderWorkspace summary readout shows engine, viewTransform, lensType, toonMaterials, outlineMeshes, and faceSdfMaterials with zero CJK in En', async () => {
+  const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
+  const { RENDER_PRESETS } = await import('../lib/project/render.js');
+  const mounted = await mount();
+  const studio = mounted.face.studio;
+  const revId = 'rev-00000001-0000-0000-0000-000000000001';
+  const reqId = 'render_11111111-1111-1111-1111-111111111111';
+  studio.set({
+    tab: 'render',
+    loaded: true,
+    boot: {
+      version: '0.10.0',
+      sessionToken: 'render-sum-tok',
+      projectExists: true,
+      activeProjectDir: 'D:/Projects/RenderSummaryDemo',
+      stages: PIPELINE_STAGES,
+      requiredViewSlots: REQUIRED_VIEW_SLOTS,
+      renderPresets: RENDER_PRESETS,
+      projectState: {
+        stateRevision: 2,
+        projectName: 'RenderSummaryDemo',
+        activeStageId: '6_expressions_vrm',
+        stages: {},
+        views: {},
+        assets: { items: [], selected: {} },
+        materials: { items: [], selected: {} },
+        editor: {
+          activeRevisionId: revId,
+          revisions: [{ id: revId, parentId: null, operation: 'import_blend', artifacts: { blend: { filePath: 'a.blend', sha256: '0123456789abcdef0123456789abcdef' } }, audit: { objects: [], gates: {}, notes: [] } }],
+        },
+        rendering: {
+          requests: [
+            {
+              id: reqId,
+              revisionId: revId,
+              blendHash: '0123456789abcdef0123456789abcdef',
+              brief: 'NPR ortho render',
+              status: 'ready_for_review',
+              recipe: { preset: 'wine_stage', camera: 'front', framing: 'portrait', size: 'draft', toon: true },
+              artifacts: { png: { width: 640, height: 800, sha256: 'fedcba9876543210fedcba9876543210' } },
+              summary: {
+                blenderVersion: '4.2.5',
+                engine: 'BLENDER_EEVEE_NEXT',
+                viewTransform: 'Standard',
+                lensType: 'ortho',
+                meshes: 4,
+                toonMaterials: 3,
+                outlineMeshes: 2,
+                faceSdfMaterials: 1,
+              },
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  const renderDeepEn = textOf(renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face)));
+  assert.equal(/[\u4e00-\u9fff]/.test(renderDeepEn), false, 'RenderWorkspace English mode must emit zero CJK');
+  assert.match(renderDeepEn, /Blender 4\.2\.5 · BLENDER_EEVEE_NEXT · Standard · ortho · 4 meshes · 3 Toon · 2 outline · 1 Face SDF/);
+
+  mounted.harness.setLanguage('zh');
+  const renderDeepZh = textOf(renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face)));
+  assert.match(renderDeepZh, /Blender 4\.2\.5 · BLENDER_EEVEE_NEXT · Standard · 正交 · 4 网格 · 3 Toon · 2 描边 · 1 Face SDF/);
+  mounted.harness.dispose();
+});
+
+test('v0.10.0 panels (3D tri-view/height ruler, calibration Undo/Redo, built-in VRMA, physics audit, Expression Lab, VRM export) emit zero CJK in En and wire actions', async () => {
+  const { PIPELINE_STAGES, REQUIRED_VIEW_SLOTS } = await import('../lib/constants.js');
+  const { MATERIAL_ROLES } = await import('../lib/project/material-roles.js');
+  const mounted = await mount();
+  const studio = mounted.face.studio;
+  const revId = 'rev-00000001-0000-0000-0000-000000000001';
+  const calls = [];
+  const projectState = {
+    stateRevision: 10,
+    projectName: 'V090PanelsDemo',
+    activeStageId: '6_expressions_vrm',
+    workflow: { mode: 'illustration', foundation: { body: null, head: null } },
+    stages: Object.fromEntries(PIPELINE_STAGES.map(s => [s.id, { status: s.index < 6 ? 'completed' : 'in_progress' }])),
+    views: {
+      balance_front: { status: 'ready', assetId: 'asset-bf' },
+      balance_right: { status: 'ready', assetId: 'asset-br' },
+      balance_back: { status: 'ready', assetId: 'asset-bk' },
+    },
+    assets: {
+      items: [
+        { id: 'asset-bf', kind: 'image', slotId: 'balance_front', label: 'Balance Front', bytes: 128, sha256: '1'.repeat(64) },
+        { id: 'asset-br', kind: 'image', slotId: 'balance_right', label: 'Balance Right', bytes: 128, sha256: '2'.repeat(64) },
+        { id: 'asset-bk', kind: 'image', slotId: 'balance_back', label: 'Balance Back', bytes: 128, sha256: '3'.repeat(64) },
+      ],
+      selected: {},
+    },
+    materials: { items: [], selected: {} },
+    editor: {
+      version: 1,
+      activeRevisionId: revId,
+      channelPreference: 'auto',
+      guiCheckout: null,
+      pendingJob: null,
+      requests: [],
+      view: { camera: 'front', overlayAssetId: null, overlayOpacity: 0.35 },
+      revisions: [
+        {
+          id: revId,
+          parentId: null,
+          operation: 'export_vrm',
+          artifacts: {
+            blend: { filePath: 'editor/revisions/1/scene.blend', sha256: 'a'.repeat(64) },
+            preview: { filePath: 'editor/revisions/1/preview.glb', sha256: 'b'.repeat(64) },
+            vrm: { filePath: 'editor/revisions/1/avatar.vrm', sha256: 'c'.repeat(64) },
+          },
+          audit: { objects: [{ name: 'Body', type: 'MESH', vertices: 300 }], gates: { weights: true, textures: true }, notes: [] },
+        },
+      ],
+    },
+    rendering: { requests: [] },
+    tripoStudio: { tickets: [] },
+    tripoQuota: { monthlyAllowance: 200, creditsUsed: 0, remainingCredits: 200, openapiTasks: [] },
+    characterSpec: { characterPrompt: 'Anime heroine', sourceImages: [], targetHeadBodyRatio: 6.3, neckScaleFactor: 0.86 },
+    vrmMetadata: { title: 'V090Hero', version: '1.0.0', authors: ['CleanRoomAuthor'], commercialUsage: 'personalNonProfit', allowRedistribution: false, modification: 'prohibited', exportedVrmPath: 'editor/revisions/1/avatar.vrm' },
+  };
+  const boot = {
+    version: '0.10.0',
+    sessionToken: 'tok-v090',
+    projectExists: true,
+    activeProjectDir: 'D:/Projects/V090PanelsDemo',
+    stages: PIPELINE_STAGES,
+    requiredViewSlots: REQUIRED_VIEW_SLOTS,
+    materialRoles: MATERIAL_ROLES,
+    projectState,
+    projectSummary: { percent: 83, completedStages: 5, readyViews: 3, remainingFreeCredits: 200 },
+  };
+  mounted.sandbox.fetch = async (url, init) => {
+    calls.push({ url, init });
+    const p = new URL(url).pathname;
+    if (p === '/studio/bootstrap') return Response.json(boot);
+    if (p === '/studio/vrm/export-meta') return Response.json({ ok: true, fileName: 'V090Hero_meta.vrm', bytes: 32, sha256: 'd'.repeat(64), meta: { name: 'V090Hero' } });
+    return Response.json({ ok: true, instruction: 'drafted' });
+  };
+
+  studio.set({ loaded: true, boot });
+  studio.put('vrmMetaTitle', 'V090Hero');
+  studio.put('vrmMetaAuthors', 'CleanRoomAuthor');
+  studio.put('materialMotionId', 'builtin:walk');
+
+  const cjk = /[\u4e00-\u9fff]/;
+  for (const deskStage of ['4_assembly', '5_rig_spring', '6_expressions_vrm']) {
+    studio.put('deskStage', deskStage);
+    const wsTree = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+    const wsText = textOf(wsTree);
+    assert.equal(cjk.test(wsText), false, `CJK leaked in English mode on stage "${deskStage}": ${wsText.match(/[\u4e00-\u9fff]+/g)?.slice(0, 5)}`);
+  }
+
+  // Stage 4: 3D Tri-View, Y=0 Ruler toggles, and linked calibration Undo/Redo
+  studio.put('deskStage', '4_assembly');
+  let ws = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  const triBtn = btn(ws, '3D Tri-View');
+  const rulerBtn = btn(ws, 'Y=0 Ruler');
+  assert.ok(triBtn && rulerBtn);
+  triBtn.props.onClick();
+  assert.equal(studio.getSnapshot().form.triView3d, true);
+  ws = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  const previewNode = hostNodes(ws).find(n => typeof n.type === 'function' && n.type.name === 'GeometryPreview') || null;
+  // Inspect DeskViewport passed props to GeometryPreview
+  const deskVp = hostNodes(mounted.runtime.render(mounted.main.component, mounted.face)).find(n => n.type?.name === 'WorkbenchWorkspace');
+  const vpDeep = renderDeep(mounted.runtime, mounted.runtime.renderIsolated(deskVp.type, deskVp.props));
+  const triViewSlider = hostNodes(vpDeep).find(n => n.type === 'input' && n.props.type === 'range' && n.props.max === '8.5');
+  assert.ok(triViewSlider, 'Head-body ratio slider must render');
+  triViewSlider.props.onChange({ target: { value: '7.0' } });
+  assert.equal(studio.getSnapshot().form.headBodyRatio, '7.00');
+  ws = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  btn(ws, 'Undo').props.onClick();
+  assert.equal(studio.getSnapshot().form.headBodyRatio, '6.3');
+  ws = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  btn(ws, 'Redo').props.onClick();
+  assert.equal(studio.getSnapshot().form.headBodyRatio, '7.00');
+
+  // Stage 5: Physics ON/OFF oscillation draft trigger + built-in walk VRMA URL
+  studio.put('deskStage', '5_rig_spring');
+  ws = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  assert.ok(textOf(ws).includes('Built-in walk loop (MIT/CC0)'));
+  const physBtn = btn(ws, 'Draft Physics ON/OFF Check');
+  assert.ok(physBtn);
+  physBtn.props.onClick();
+  await new Promise(setImmediate);
+  const physReq = calls.find(c => new URL(c.url).pathname === '/studio/editor/ai-request' && JSON.parse(c.init.body).intent === 'rigging');
+  assert.ok(physReq, 'Physics ON/OFF check must post intent=rigging');
+  assert.match(JSON.parse(physReq.init.body).prompt, /physics_oscillation_audit/);
+
+  // Stage 6: Expression Lab (intent='expressions') + One-Click VRM Metadata Export
+  studio.put('deskStage', '6_expressions_vrm');
+  ws = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  const exprBtn = btn(ws, 'Draft Expression Lab');
+  assert.ok(exprBtn);
+  exprBtn.props.onClick();
+  await new Promise(setImmediate);
+  const exprReq = calls.find(c => new URL(c.url).pathname === '/studio/editor/ai-request' && JSON.parse(c.init.body).intent === 'expressions');
+  assert.ok(exprReq, 'Expression Lab must post intent=expressions');
+
+  const exportBtn = btn(ws, 'Export Patched VRM');
+  assert.ok(exportBtn);
+  exportBtn.props.onClick();
+  await new Promise(setImmediate);
+  const metaReq = calls.find(c => new URL(c.url).pathname === '/studio/vrm/export-meta');
+  assert.ok(metaReq, 'One-click VRM export must call POST /studio/vrm/export-meta');
+  const metaBody = JSON.parse(metaReq.init.body);
+  assert.equal(metaBody.meta.title, 'V090Hero');
+  assert.deepEqual(metaBody.meta.authors, ['CleanRoomAuthor']);
+
+  // Also check GeometryPreview renders cleanly in English with HUD & calibration controls
+  const vpTree = renderDeep(mounted.runtime, mounted.runtime.render(mounted.main.component, mounted.face));
+  assert.equal(cjk.test(textOf(vpTree)), false, 'Stage 6 English mode must emit zero CJK');
+  mounted.harness.dispose();
+});
+
+test('v0.10.0 client bundle mounts and operates cleanly under strict Cordis 4 Proxy ctx', async () => {
+  const ALLOWED_PROPS = new Set(['slots', 'locale', 'effect', 'get']);
+  const drafts = [];
+  const panels = [];
+
+  for (const throwOnGet of [false, true]) {
+    const loaded = await loadClient();
+    const harness = createHarness();
+    if (!throwOnGet) {
+      harness.services.set('sessions', {
+        list: { getSnapshot: () => ({ byId: { 's-main': { retainedBy: { mainView: 1 } } } }) },
+        binding: (id) => ({ sessionId: id }),
+      });
+      harness.services.set('conversation', {
+        input: { requestDraftInitialization: (binding, options) => { drafts.push({ binding, options }); return 'applied'; } },
+      });
+      harness.services.set('layout', { selectPanel: (id) => panels.push(id) });
+    }
+    const baseCtx = throwOnGet
+      ? {
+          ...harness.ctx,
+          get(prop) { throw new Error('cannot get service "' + String(prop) + '" without inject'); },
+        }
+      : harness.ctx;
+    const strictCtx = new Proxy(baseCtx, {
+      get(target, prop, receiver) {
+        if (!ALLOWED_PROPS.has(prop)) {
+          throw new Error('cannot get property "' + String(prop) + '" without inject');
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    assert.throws(() => strictCtx.webServer, /cannot get property "webServer" without inject/);
+    assert.throws(() => strictCtx.sessions, /cannot get property "sessions" without inject/);
+    assert.deepEqual([...loaded.moduleExports.inject], ['slots', 'locale']);
+
+    assert.doesNotThrow(() => loaded.moduleExports.apply(strictCtx, {}));
+    harness.injections.forEach((injection) => injection.callback());
+
+    const sidebar = harness.registrations.find((item) => item.options.name === 'sidebar.panellist');
+    const main = harness.registrations.find((item) => item.options.name === 'main');
+    assert.ok(sidebar && main);
+    const face = main.options.inject();
+    const tree = loaded.runtime.render(main.component, face);
+    assert.equal(tree.type, 'div');
+
+    if (throwOnGet) {
+      assert.equal(face.studio.currentSessionId(), undefined);
+      assert.equal(face.studio.insertInstructions('strict-proxy-draft'), 'unsupported');
+    } else {
+      assert.equal(face.studio.currentSessionId(), 's-main');
+      assert.equal(face.studio.insertInstructions('strict-proxy-draft'), 'ok');
+      assert.equal(drafts.length, 1);
+      assert.deepEqual(panels, [null]);
+    }
+    harness.dispose();
+  }
 });

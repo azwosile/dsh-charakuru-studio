@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Avatar Studio 角色工作台",
-    "description": "0.7.0 实验版：双路线 AI 建模与本机渲染审阅，Blender 双通道（插件契约 + Computer-Use GUI 签出/签入），Tripo OpenAPI v3 与多视角浏览器接力，浅/深双主题自适应工作台。云端默认关闭。",
+    "description": "0.10.0 实验版：Blender 4.2/5.x 与 Cycles 描边/ShapeKey/VRM 插件兼容加固、Cordis 4 与回环安全及 3D 视口竞态修复、Tripo 幂等超时与 Qwen 采样器参数隔离。云端默认关闭。",
     "detail": "docs/DETAIL.zh.md"
   }
 }
